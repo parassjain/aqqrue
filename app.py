@@ -198,13 +198,21 @@ else:
 with right_col:
     st.subheader("Chat with your data")
 
-    # Re-render history
-    for msg in st.session_state.ui_messages:
-        with st.chat_message(msg["role"]):
-            _render_ui_message(msg)
+    # Fixed-height scrollable container for all chat messages — keeps input pinned below
+    msgs_container = st.container(height=600, border=False)
 
+    # Chat input rendered here so it stays at the bottom of the column
     if st.session_state.working_file:
         user_input = st.chat_input("Describe what you want to do with this data...")
+    else:
+        st.chat_input("Upload a CSV to get started…", disabled=True)
+        user_input = None
+
+    with msgs_container:
+        # Re-render history
+        for msg in st.session_state.ui_messages:
+            with st.chat_message(msg["role"]):
+                _render_ui_message(msg)
 
         if user_input:
             with st.chat_message("user"):
