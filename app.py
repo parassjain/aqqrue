@@ -46,12 +46,12 @@ st.set_page_config(page_title="CSV AI Agent", page_icon="📊", layout="wide")
 # Session state
 # ---------------------------------------------------------------------------
 _DEFAULTS: dict = {
-    "messages": [],            # list[BaseMessage] — full LangChain conversation history
-    "ui_messages": [],         # list[dict] — rendered chat log
-    "working_file": None,      # str | None — current output/ CSV path
-    "file_history": [],        # list[str] — stack of output/ paths for undo support
-    "session_id": None,        # str — UUID for this upload session
-    "uploaded_filename": None, # str — original filename for display
+    "messages": [],  # list[BaseMessage] — full LangChain conversation history
+    "ui_messages": [],  # list[dict] — rendered chat log
+    "working_file": None,  # str | None — current output/ CSV path
+    "file_history": [],  # list[str] — stack of output/ paths for undo support
+    "session_id": None,  # str — UUID for this upload session
+    "uploaded_filename": None,  # str — original filename for display
     "session_tokens": {"input": 0, "output": 0, "total": 0},  # cumulative token usage
 }
 for _k, _v in _DEFAULTS.items():
@@ -87,14 +87,18 @@ with st.sidebar:
 
         try:
             df_prev = pd.read_csv(str(out_path))
-            st.success(f"**{uploaded.name}**\n{len(df_prev):,} rows × {len(df_prev.columns)} columns")
+            st.success(
+                f"**{uploaded.name}**\n{len(df_prev):,} rows × {len(df_prev.columns)} columns"
+            )
             with st.expander("Column preview", expanded=False):
                 st.dataframe(
-                    pd.DataFrame({
-                        "Column": df_prev.columns,
-                        "Type": df_prev.dtypes.astype(str).values,
-                        "Nulls": df_prev.isnull().sum().values,
-                    }),
+                    pd.DataFrame(
+                        {
+                            "Column": df_prev.columns,
+                            "Type": df_prev.dtypes.astype(str).values,
+                            "Nulls": df_prev.isnull().sum().values,
+                        }
+                    ),
                     use_container_width=True,
                     hide_index=True,
                 )
@@ -118,6 +122,7 @@ with st.sidebar:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _offer_download(file_path: str, label: str = "Download CSV") -> None:
     try:
@@ -258,34 +263,52 @@ with right_col:
                                 status_box.update(label="Executing plan…")
 
                             elif isinstance(event, PlanStepCompleted):
-                                updated = event.plan.to_markdown() if hasattr(event, "plan") else ""
+                                updated = (
+                                    event.plan.to_markdown()
+                                    if hasattr(event, "plan")
+                                    else ""
+                                )
                                 if updated:
                                     progress_md[0] = updated
                                 else:
-                                    progress_md.append(f"✅ Step {event.step.step_number}: {event.step.description}")
+                                    progress_md.append(
+                                        f"✅ Step {event.step.step_number}: {event.step.description}"
+                                    )
                                 _refresh_progress()
 
                             elif isinstance(event, PlanStepFailed):
-                                progress_md.append(f"❌ Step {event.step.step_number}: {event.error}")
+                                progress_md.append(
+                                    f"❌ Step {event.step.step_number}: {event.error}"
+                                )
                                 _refresh_progress()
 
                             elif isinstance(event, DataFrameResult):
                                 if event.output_file:
                                     if not event.display_only:
                                         # Permanent write — update working file and left-panel preview
-                                        st.session_state.working_file = event.output_file
+                                        st.session_state.working_file = (
+                                            event.output_file
+                                        )
                                         _update_csv_preview(event.output_file)
                                     try:
-                                        preview = pd.read_csv(event.output_file).head(10)
+                                        preview = pd.read_csv(event.output_file).head(
+                                            10
+                                        )
                                         st.caption(f"📄 {event.message}")
                                         st.dataframe(preview, use_container_width=True)
                                         if not event.display_only:
                                             _offer_download(event.output_file)
-                                        assistant_ui["dataframes"].append({
-                                            "caption": event.message,
-                                            "data": preview,
-                                            "download_path": None if event.display_only else event.output_file,
-                                        })
+                                        assistant_ui["dataframes"].append(
+                                            {
+                                                "caption": event.message,
+                                                "data": preview,
+                                                "download_path": (
+                                                    None
+                                                    if event.display_only
+                                                    else event.output_file
+                                                ),
+                                            }
+                                        )
                                     except Exception as exc:
                                         st.warning(f"Preview failed: {exc}")
 
@@ -293,50 +316,77 @@ with right_col:
                                 try:
                                     fig = pio.from_json(open(event.chart_file).read())
                                     st.plotly_chart(fig, use_container_width=True)
-                                    assistant_ui["charts"].append({"path": event.chart_file})
+                                    assistant_ui["charts"].append(
+                                        {"path": event.chart_file}
+                                    )
                                 except Exception as exc:
                                     st.warning(f"Chart render failed: {exc}")
 
                             elif isinstance(event, StatsResult):
                                 try:
                                     st.caption(f"📊 {event.message}")
-                                    st.dataframe(pd.DataFrame(event.statistics).round(4), use_container_width=True)
-                                    assistant_ui["stats"].append({
-                                        "message": event.message,
-                                        "data": event.statistics,
-                                    })
+                                    st.dataframe(
+                                        pd.DataFrame(event.statistics).round(4),
+                                        use_container_width=True,
+                                    )
+                                    assistant_ui["stats"].append(
+                                        {
+                                            "message": event.message,
+                                            "data": event.statistics,
+                                        }
+                                    )
                                 except Exception:
                                     st.json(event.statistics)
 
                             elif isinstance(event, FinalResponse):
-                                status_box.update(label="Done ✅", state="complete", expanded=False)
+                                status_box.update(
+                                    label="Done ✅", state="complete", expanded=False
+                                )
                                 final_placeholder.markdown(event.text)
                                 assistant_ui["text"] = event.text
 
                             elif isinstance(event, UndoPerformed):
                                 st.session_state.working_file = event.restored_file
                                 _update_csv_preview(event.restored_file)
-                                progress_md.append(f"↩️ Undone — restored to: `{os.path.basename(event.restored_file)}`")
+                                progress_md.append(
+                                    f"↩️ Undone — restored to: `{os.path.basename(event.restored_file)}`"
+                                )
                                 _refresh_progress()
-                                assistant_ui["text"] = f"Undone. Restored to the previous state: `{os.path.basename(event.restored_file)}`"
+                                assistant_ui["text"] = (
+                                    f"Undone. Restored to the previous state: `{os.path.basename(event.restored_file)}`"
+                                )
 
                             elif isinstance(event, TokenUsageUpdate):
-                                tu = {"input": event.input_tokens, "output": event.output_tokens, "total": event.total_tokens}
+                                tu = {
+                                    "input": event.input_tokens,
+                                    "output": event.output_tokens,
+                                    "total": event.total_tokens,
+                                }
                                 assistant_ui["token_usage"] = tu
-                                st.session_state.session_tokens["input"] += event.input_tokens
-                                st.session_state.session_tokens["output"] += event.output_tokens
-                                st.session_state.session_tokens["total"] += event.total_tokens
+                                st.session_state.session_tokens[
+                                    "input"
+                                ] += event.input_tokens
+                                st.session_state.session_tokens[
+                                    "output"
+                                ] += event.output_tokens
+                                st.session_state.session_tokens[
+                                    "total"
+                                ] += event.total_tokens
                                 token_placeholder.caption(
                                     f"Tokens — {event.input_tokens:,} input · {event.output_tokens:,} output · **{event.total_tokens:,} total**"
                                 )
 
                             elif isinstance(event, AgentError):
-                                status_box.update(label="Error ❌", state="error", expanded=True)
+                                status_box.update(
+                                    label="Error ❌", state="error", expanded=True
+                                )
                                 st.error(event.message)
                                 assistant_ui["error"] = event.message
 
                     except Exception as exc:
-                        status_box.update(label="Error ❌", state="error", expanded=True)
+                        status_box.update(
+                            label="Error ❌", state="error", expanded=True
+                        )
                         err = f"Unexpected error: {exc}"
                         st.error(err)
                         assistant_ui["error"] = err
