@@ -189,7 +189,7 @@ def _update_csv_preview(file_path: str) -> None:
                 f"**{st.session_state.uploaded_filename}** · "
                 f"{len(df):,} rows × {len(df.columns)} cols"
             )
-            st.dataframe(df, use_container_width=True, height=600)
+            st.dataframe(df, use_container_width=True, height=500)
     except Exception as exc:
         _csv_preview.error(f"Could not read file: {exc}")
 
@@ -204,7 +204,7 @@ with right_col:
     st.subheader("Chat with your data")
 
     # Fixed-height scrollable container for all chat messages — keeps input pinned below
-    msgs_container = st.container(height=600, border=False)
+    msgs_container = st.container(height=500, border=False)
 
     # Chat input rendered here so it stays at the bottom of the column
     if st.session_state.working_file:
