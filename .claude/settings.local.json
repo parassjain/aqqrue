@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /Users/parasjain/work/aqqrue/agent /Users/parasjain/work/aqqrue/tools /Users/parasjain/work/aqqrue/input /Users/parasjain/work/aqqrue/output/charts)",
+      "Bash(touch /Users/parasjain/work/aqqrue/input/.gitkeep /Users/parasjain/work/aqqrue/output/.gitkeep /Users/parasjain/work/aqqrue/agent/__init__.py /Users/parasjain/work/aqqrue/tools/__init__.py)"
+    ]
+  }
+}
