@@ -172,7 +172,7 @@ def _render_ui_message(msg: dict) -> None:
 # ---------------------------------------------------------------------------
 # Two-column layout: CSV preview (left) | Chat (right)
 # ---------------------------------------------------------------------------
-left_col, right_col = st.columns([1.1, 1], gap="large")
+left_col, right_col = st.columns([1.5, 1], gap="small")
 
 # ── Left: live CSV preview ──────────────────────────────────────────────────
 with left_col:
