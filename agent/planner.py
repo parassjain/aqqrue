@@ -98,6 +98,7 @@ class DataFrameResult:
     row_count: int
     columns: list[str]
     message: str
+    display_only: bool = False  # True → show preview but do NOT update working file
 
 
 @dataclass

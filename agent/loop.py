@@ -37,8 +37,11 @@ from agent.planner import (
 from tools.csv_io import get_schema
 
 
-# Tools that write a CSV and return an output_file (tracked for undo)
-_CSV_OUTPUT_TOOLS = {"filter_rows", "transform_columns", "aggregate_data", "save_result"}
+# Tools that permanently update the working file (tracked for undo)
+_CSV_WRITE_TOOLS = {"transform_columns", "save_result"}
+
+# Tools that produce a result CSV for display only — working file must NOT change
+_CSV_DISPLAY_TOOLS = {"filter_rows", "aggregate_data"}
 
 
 def run(
@@ -101,7 +104,7 @@ def run(
                         else:
                             yield AgentError(message="Nothing to undo — no previous operation found.")
 
-                    elif tool_name in _CSV_OUTPUT_TOOLS:
+                    elif tool_name in _CSV_WRITE_TOOLS or tool_name in _CSV_DISPLAY_TOOLS:
                         if result.get("status") == "error":
                             _mark_step_failed(plan, tool_name, result.get("message", ""))
                             yield PlanStepFailed(
@@ -116,14 +119,16 @@ def run(
                                     result_summary=result.get("message", ""),
                                 )
                             output_file = result.get("output_file", "")
-                            # Track file for undo support
-                            if file_history is not None and output_file:
+                            display_only = tool_name in _CSV_DISPLAY_TOOLS
+                            # Only track in undo history for true write operations
+                            if not display_only and file_history is not None and output_file:
                                 file_history.append(output_file)
                             yield DataFrameResult(
                                 output_file=output_file,
                                 row_count=result.get("row_count", 0),
                                 columns=result.get("columns", []),
                                 message=result.get("message", ""),
+                                display_only=display_only,
                             )
 
                     elif tool_name == "generate_chart":

@@ -271,17 +271,20 @@ with right_col:
 
                             elif isinstance(event, DataFrameResult):
                                 if event.output_file:
-                                    st.session_state.working_file = event.output_file
-                                    _update_csv_preview(event.output_file)
+                                    if not event.display_only:
+                                        # Permanent write — update working file and left-panel preview
+                                        st.session_state.working_file = event.output_file
+                                        _update_csv_preview(event.output_file)
                                     try:
                                         preview = pd.read_csv(event.output_file).head(10)
                                         st.caption(f"📄 {event.message}")
                                         st.dataframe(preview, use_container_width=True)
-                                        _offer_download(event.output_file)
+                                        if not event.display_only:
+                                            _offer_download(event.output_file)
                                         assistant_ui["dataframes"].append({
                                             "caption": event.message,
                                             "data": preview,
-                                            "download_path": event.output_file,
+                                            "download_path": None if event.display_only else event.output_file,
                                         })
                                     except Exception as exc:
                                         st.warning(f"Preview failed: {exc}")
