@@ -165,142 +165,157 @@ def _render_ui_message(msg: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Main chat area
+# Two-column layout: CSV preview (left) | Chat (right)
 # ---------------------------------------------------------------------------
-st.header("Chat with your data")
+left_col, right_col = st.columns([1.1, 1], gap="large")
 
-# Re-render history
-for msg in st.session_state.ui_messages:
-    with st.chat_message(msg["role"]):
-        _render_ui_message(msg)
+# ── Left: live CSV preview ──────────────────────────────────────────────────
+with left_col:
+    st.subheader("Live Data Preview")
+    if st.session_state.working_file:
+        try:
+            df_live = pd.read_csv(st.session_state.working_file)
+            st.caption(
+                f"**{st.session_state.uploaded_filename}** · "
+                f"{len(df_live):,} rows × {len(df_live.columns)} cols"
+            )
+            st.dataframe(df_live, use_container_width=True, height=600)
+        except Exception as exc:
+            st.error(f"Could not read current file: {exc}")
+    else:
+        st.info("Upload a CSV file in the sidebar to get started.")
 
-if not st.session_state.working_file:
-    st.info("Upload a CSV file in the sidebar to get started.")
-    st.stop()
+# ── Right: chat interface ───────────────────────────────────────────────────
+with right_col:
+    st.subheader("Chat with your data")
 
-user_input = st.chat_input("Describe what you want to do with this data...")
+    # Re-render history
+    for msg in st.session_state.ui_messages:
+        with st.chat_message(msg["role"]):
+            _render_ui_message(msg)
 
-if user_input:
-    with st.chat_message("user"):
-        st.markdown(user_input)
-    st.session_state.ui_messages.append({"role": "user", "text": user_input})
+    if st.session_state.working_file:
+        user_input = st.chat_input("Describe what you want to do with this data...")
 
-    assistant_ui: dict = {
-        "role": "assistant",
-        "text": "",
-        "plan_markdown": "",
-        "dataframes": [],
-        "charts": [],
-        "stats": [],
-        "error": "",
-        "token_usage": None,
-    }
+        if user_input:
+            with st.chat_message("user"):
+                st.markdown(user_input)
+            st.session_state.ui_messages.append({"role": "user", "text": user_input})
 
-    with st.chat_message("assistant"):
-        status_box = st.status("Thinking…", expanded=True)
-        final_placeholder = st.empty()
-        token_placeholder = st.empty()
+            assistant_ui: dict = {
+                "role": "assistant",
+                "text": "",
+                "plan_markdown": "",
+                "dataframes": [],
+                "charts": [],
+                "stats": [],
+                "error": "",
+                "token_usage": None,
+            }
 
-        with status_box:
-            progress_md: list[str] = []
-            progress_slot = st.empty()
+            with st.chat_message("assistant"):
+                status_box = st.status("Thinking…", expanded=True)
+                final_placeholder = st.empty()
+                token_placeholder = st.empty()
 
-            def _refresh_progress() -> None:
-                progress_slot.markdown("\n\n".join(progress_md))
+                with status_box:
+                    progress_md: list[str] = []
+                    progress_slot = st.empty()
 
-            try:
-                for event in agent_loop.run(
-                    user_message=user_input,
-                    working_file=st.session_state.working_file,
-                    conversation_history=st.session_state.messages,
-                    file_history=st.session_state.file_history,
-                ):
-                    if isinstance(event, PlanCreated):
-                        plan_md = event.plan.to_markdown()
-                        progress_md.clear()
-                        progress_md.append(plan_md)
-                        _refresh_progress()
-                        assistant_ui["plan_markdown"] = plan_md
-                        status_box.update(label="Executing plan…")
+                    def _refresh_progress() -> None:
+                        progress_slot.markdown("\n\n".join(progress_md))
 
-                    elif isinstance(event, PlanStepCompleted):
-                        # Update the matching line in the plan markdown to ✅
-                        updated = event.plan.to_markdown() if hasattr(event, "plan") else ""
-                        if updated:
-                            progress_md[0] = updated
-                        else:
-                            progress_md.append(f"✅ Step {event.step.step_number}: {event.step.description}")
-                        _refresh_progress()
+                    try:
+                        for event in agent_loop.run(
+                            user_message=user_input,
+                            working_file=st.session_state.working_file,
+                            conversation_history=st.session_state.messages,
+                            file_history=st.session_state.file_history,
+                        ):
+                            if isinstance(event, PlanCreated):
+                                plan_md = event.plan.to_markdown()
+                                progress_md.clear()
+                                progress_md.append(plan_md)
+                                _refresh_progress()
+                                assistant_ui["plan_markdown"] = plan_md
+                                status_box.update(label="Executing plan…")
 
-                    elif isinstance(event, PlanStepFailed):
-                        progress_md.append(f"❌ Step {event.step.step_number}: {event.error}")
-                        _refresh_progress()
+                            elif isinstance(event, PlanStepCompleted):
+                                updated = event.plan.to_markdown() if hasattr(event, "plan") else ""
+                                if updated:
+                                    progress_md[0] = updated
+                                else:
+                                    progress_md.append(f"✅ Step {event.step.step_number}: {event.step.description}")
+                                _refresh_progress()
 
-                    elif isinstance(event, DataFrameResult):
-                        if event.output_file:
-                            try:
-                                preview = pd.read_csv(event.output_file).head(10)
-                                st.caption(f"📄 {event.message}")
-                                st.dataframe(preview, use_container_width=True)
-                                _offer_download(event.output_file)
-                                assistant_ui["dataframes"].append({
-                                    "caption": event.message,
-                                    "data": preview,
-                                    "download_path": event.output_file,
-                                })
-                            except Exception as exc:
-                                st.warning(f"Preview failed: {exc}")
+                            elif isinstance(event, PlanStepFailed):
+                                progress_md.append(f"❌ Step {event.step.step_number}: {event.error}")
+                                _refresh_progress()
 
-                    elif isinstance(event, ChartGenerated):
-                        try:
-                            fig = pio.from_json(open(event.chart_file).read())
-                            st.plotly_chart(fig, use_container_width=True)
-                            assistant_ui["charts"].append({"path": event.chart_file})
-                        except Exception as exc:
-                            st.warning(f"Chart render failed: {exc}")
+                            elif isinstance(event, DataFrameResult):
+                                if event.output_file:
+                                    try:
+                                        preview = pd.read_csv(event.output_file).head(10)
+                                        st.caption(f"📄 {event.message}")
+                                        st.dataframe(preview, use_container_width=True)
+                                        _offer_download(event.output_file)
+                                        assistant_ui["dataframes"].append({
+                                            "caption": event.message,
+                                            "data": preview,
+                                            "download_path": event.output_file,
+                                        })
+                                    except Exception as exc:
+                                        st.warning(f"Preview failed: {exc}")
 
-                    elif isinstance(event, StatsResult):
-                        try:
-                            st.caption(f"📊 {event.message}")
-                            st.dataframe(pd.DataFrame(event.statistics).round(4), use_container_width=True)
-                            assistant_ui["stats"].append({
-                                "message": event.message,
-                                "data": event.statistics,
-                            })
-                        except Exception:
-                            st.json(event.statistics)
+                            elif isinstance(event, ChartGenerated):
+                                try:
+                                    fig = pio.from_json(open(event.chart_file).read())
+                                    st.plotly_chart(fig, use_container_width=True)
+                                    assistant_ui["charts"].append({"path": event.chart_file})
+                                except Exception as exc:
+                                    st.warning(f"Chart render failed: {exc}")
 
-                    elif isinstance(event, FinalResponse):
-                        status_box.update(label="Done ✅", state="complete", expanded=False)
-                        final_placeholder.markdown(event.text)
-                        assistant_ui["text"] = event.text
+                            elif isinstance(event, StatsResult):
+                                try:
+                                    st.caption(f"📊 {event.message}")
+                                    st.dataframe(pd.DataFrame(event.statistics).round(4), use_container_width=True)
+                                    assistant_ui["stats"].append({
+                                        "message": event.message,
+                                        "data": event.statistics,
+                                    })
+                                except Exception:
+                                    st.json(event.statistics)
 
-                    elif isinstance(event, UndoPerformed):
-                        st.session_state.working_file = event.restored_file
-                        progress_md.append(f"↩️ Undone — restored to: `{os.path.basename(event.restored_file)}`")
-                        _refresh_progress()
-                        assistant_ui["text"] = f"Undone. Restored to the previous state: `{os.path.basename(event.restored_file)}`"
+                            elif isinstance(event, FinalResponse):
+                                status_box.update(label="Done ✅", state="complete", expanded=False)
+                                final_placeholder.markdown(event.text)
+                                assistant_ui["text"] = event.text
 
-                    elif isinstance(event, TokenUsageUpdate):
-                        tu = {"input": event.input_tokens, "output": event.output_tokens, "total": event.total_tokens}
-                        assistant_ui["token_usage"] = tu
-                        # Accumulate session-level totals
-                        st.session_state.session_tokens["input"] += event.input_tokens
-                        st.session_state.session_tokens["output"] += event.output_tokens
-                        st.session_state.session_tokens["total"] += event.total_tokens
-                        token_placeholder.caption(
-                            f"Tokens — {event.input_tokens:,} input · {event.output_tokens:,} output · **{event.total_tokens:,} total**"
-                        )
+                            elif isinstance(event, UndoPerformed):
+                                st.session_state.working_file = event.restored_file
+                                progress_md.append(f"↩️ Undone — restored to: `{os.path.basename(event.restored_file)}`")
+                                _refresh_progress()
+                                assistant_ui["text"] = f"Undone. Restored to the previous state: `{os.path.basename(event.restored_file)}`"
 
-                    elif isinstance(event, AgentError):
+                            elif isinstance(event, TokenUsageUpdate):
+                                tu = {"input": event.input_tokens, "output": event.output_tokens, "total": event.total_tokens}
+                                assistant_ui["token_usage"] = tu
+                                st.session_state.session_tokens["input"] += event.input_tokens
+                                st.session_state.session_tokens["output"] += event.output_tokens
+                                st.session_state.session_tokens["total"] += event.total_tokens
+                                token_placeholder.caption(
+                                    f"Tokens — {event.input_tokens:,} input · {event.output_tokens:,} output · **{event.total_tokens:,} total**"
+                                )
+
+                            elif isinstance(event, AgentError):
+                                status_box.update(label="Error ❌", state="error", expanded=True)
+                                st.error(event.message)
+                                assistant_ui["error"] = event.message
+
+                    except Exception as exc:
                         status_box.update(label="Error ❌", state="error", expanded=True)
-                        st.error(event.message)
-                        assistant_ui["error"] = event.message
+                        err = f"Unexpected error: {exc}"
+                        st.error(err)
+                        assistant_ui["error"] = err
 
-            except Exception as exc:
-                status_box.update(label="Error ❌", state="error", expanded=True)
-                err = f"Unexpected error: {exc}"
-                st.error(err)
-                assistant_ui["error"] = err
-
-    st.session_state.ui_messages.append(assistant_ui)
+            st.session_state.ui_messages.append(assistant_ui)
