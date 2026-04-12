@@ -121,3 +121,9 @@ class FinalResponse:
 @dataclass
 class AgentError:
     message: str
+
+
+@dataclass
+class UndoPerformed:
+    restored_file: str
+    message: str

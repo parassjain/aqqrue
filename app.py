@@ -23,6 +23,7 @@ from agent.planner import (
     StatsResult,
     FinalResponse,
     AgentError,
+    UndoPerformed,
 )
 from config import LLM_PROVIDER, MODEL_NAME
 
@@ -47,6 +48,7 @@ _DEFAULTS: dict = {
     "messages": [],            # list[BaseMessage] — full LangChain conversation history
     "ui_messages": [],         # list[dict] — rendered chat log
     "working_file": None,      # str | None — current output/ CSV path
+    "file_history": [],        # list[str] — stack of output/ paths for undo support
     "session_id": None,        # str — UUID for this upload session
     "uploaded_filename": None, # str — original filename for display
 }
@@ -70,6 +72,7 @@ with st.sidebar:
         st.session_state.uploaded_filename = uploaded.name
         st.session_state.messages = []
         st.session_state.ui_messages = []
+        st.session_state.file_history = []
 
         # Save original to input/ (immutable)
         (_INPUT_DIR / f"{sid}_{uploaded.name}").write_bytes(uploaded.getvalue())
@@ -78,6 +81,7 @@ with st.sidebar:
         out_path = _OUTPUT_DIR / f"{sid}_{uploaded.name}"
         shutil.copy2(_INPUT_DIR / f"{sid}_{uploaded.name}", out_path)
         st.session_state.working_file = str(out_path)
+        st.session_state.file_history = [str(out_path)]
 
         try:
             df_prev = pd.read_csv(str(out_path))
@@ -193,6 +197,7 @@ if user_input:
                     user_message=user_input,
                     working_file=st.session_state.working_file,
                     conversation_history=st.session_state.messages,
+                    file_history=st.session_state.file_history,
                 ):
                     if isinstance(event, PlanCreated):
                         plan_md = event.plan.to_markdown()
@@ -253,6 +258,12 @@ if user_input:
                         status_box.update(label="Done ✅", state="complete", expanded=False)
                         final_placeholder.markdown(event.text)
                         assistant_ui["text"] = event.text
+
+                    elif isinstance(event, UndoPerformed):
+                        st.session_state.working_file = event.restored_file
+                        progress_md.append(f"↩️ Undone — restored to: `{os.path.basename(event.restored_file)}`")
+                        _refresh_progress()
+                        assistant_ui["text"] = f"Undone. Restored to the previous state: `{os.path.basename(event.restored_file)}`"
 
                     elif isinstance(event, AgentError):
                         status_box.update(label="Error ❌", state="error", expanded=True)

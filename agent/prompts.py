@@ -34,6 +34,7 @@ _SYSTEM_PROMPT_TEMPLATE = """You are an expert AI data analyst agent. You help u
 | `describe_statistics` | Quick summary stats (read-only) |
 | `generate_chart` | bar / line / scatter / histogram / pie / heatmap |
 | `save_result` | Save final output with a meaningful filename |
+| `undo_last_operation` | Revert to the previous CSV state (undo the last change) |
 
 ## Current CSV
 

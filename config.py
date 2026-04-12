@@ -3,7 +3,7 @@ LLM provider factory.
 Switch provider by setting LLM_PROVIDER in your .env file:
   LLM_PROVIDER=anthropic  MODEL_NAME=claude-sonnet-4-6
   LLM_PROVIDER=groq       MODEL_NAME=llama-3.3-70b-versatile
-  LLM_PROVIDER=google     MODEL_NAME=gemini-2.0-flash
+  LLM_PROVIDER=google     MODEL_NAME=gemini-2.5-flash
   LLM_PROVIDER=openai     MODEL_NAME=gpt-4o
   LLM_PROVIDER=ollama     MODEL_NAME=llama3.2
 """

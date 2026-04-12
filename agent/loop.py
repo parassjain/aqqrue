@@ -31,11 +31,12 @@ from agent.planner import (
     StatsResult,
     FinalResponse,
     AgentError,
+    UndoPerformed,
 )
 from tools.csv_io import get_schema
 
 
-# Tools that write a CSV and return an output_file
+# Tools that write a CSV and return an output_file (tracked for undo)
 _CSV_OUTPUT_TOOLS = {"filter_rows", "transform_columns", "aggregate_data", "save_result"}
 
 
@@ -43,13 +44,14 @@ def run(
     user_message: str,
     working_file: str,
     conversation_history: list[BaseMessage],
+    file_history: list[str] | None = None,
 ) -> Generator[Any, None, None]:
     """
     Generator — yields typed events for app.py to render in real time.
 
-    conversation_history is mutated in-place: the current turn's messages
-    (HumanMessage + all AIMessages + ToolMessages) are appended at the end,
-    preserving full multi-turn context for the next call.
+    conversation_history is mutated in-place (appended) for multi-turn support.
+    file_history is mutated in-place: each CSV-writing tool appends its output_file,
+    and undo_last_operation pops the latest entry to restore the previous state.
     """
     graph = create_graph()
 
@@ -85,6 +87,17 @@ def run(
                         plan = Plan.from_tool_result(result)
                         yield PlanCreated(plan=plan)
 
+                    elif tool_name == "undo_last_operation":
+                        if file_history is not None and len(file_history) > 1:
+                            file_history.pop()  # remove current (last) file
+                            restored = file_history[-1]
+                            yield UndoPerformed(
+                                restored_file=restored,
+                                message=f"Reverted to previous file: {restored}",
+                            )
+                        else:
+                            yield AgentError(message="Nothing to undo — no previous operation found.")
+
                     elif tool_name in _CSV_OUTPUT_TOOLS:
                         if result.get("status") == "error":
                             _mark_step_failed(plan, tool_name, result.get("message", ""))
@@ -99,8 +112,12 @@ def run(
                                     step=step,
                                     result_summary=result.get("message", ""),
                                 )
+                            output_file = result.get("output_file", "")
+                            # Track file for undo support
+                            if file_history is not None and output_file:
+                                file_history.append(output_file)
                             yield DataFrameResult(
-                                output_file=result.get("output_file", ""),
+                                output_file=output_file,
                                 row_count=result.get("row_count", 0),
                                 columns=result.get("columns", []),
                                 message=result.get("message", ""),

@@ -126,6 +126,14 @@ def generate_chart(
 
 
 @tool
+def undo_last_operation() -> dict:
+    """Undo the last data operation and restore the CSV to its previous state.
+    Call this when the user asks to undo, revert, or go back to the previous step.
+    No parameters needed — the system handles the file restoration automatically."""
+    return {"action": "undo_requested"}
+
+
+@tool
 def save_result(file_path: str, output_filename: str) -> dict:
     """Save the current working CSV to output/ with a meaningful filename.
     output_filename: desired name, e.g. 'sales_filtered.csv'."""
@@ -154,4 +162,5 @@ ALL_TOOLS = [
     describe_statistics,
     generate_chart,
     save_result,
+    undo_last_operation,
 ]
