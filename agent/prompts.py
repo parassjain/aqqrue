@@ -29,7 +29,7 @@ _SYSTEM_PROMPT_TEMPLATE = """You are an expert AI data analyst agent. You help u
 | `get_csv_schema` | Always first — understand column names and types |
 | `provide_plan` | Always second — before any data operation |
 | `filter_rows` | Select a subset of rows by conditions |
-| `transform_columns` | Rename, cast type, fill nulls, sort, dedup |
+| `transform_columns` | Rename, cast type, fill nulls (incl. from another column), extract via regex, sort, dedup |
 | `aggregate_data` | Group by + aggregate (sum, mean, count…) |
 | `describe_statistics` | Quick summary stats (read-only) |
 | `generate_chart` | bar / line / scatter / histogram / pie / heatmap |

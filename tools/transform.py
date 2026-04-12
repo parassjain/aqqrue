@@ -8,7 +8,7 @@ from tools.csv_io import load_csv, save_csv
 from tools.safety import validate_columns_exist, ToolError
 
 _VALID_TYPES = {"int", "float", "str", "bool", "datetime"}
-_VALID_FILL_STRATEGIES = {"mean", "median", "mode", "ffill", "bfill", "value"}
+_VALID_FILL_STRATEGIES = {"mean", "median", "mode", "ffill", "bfill", "value", "from_column"}
 
 
 def transform_columns(file_path: str, operations: list[dict], output_file: str) -> dict:
@@ -19,7 +19,12 @@ def transform_columns(file_path: str, operations: list[dict], output_file: str) 
     Supported operations:
       - rename:           params = {new_name: str}
       - cast_type:        params = {target_type: "int|float|str|bool|datetime"}
-      - fill_nulls:       params = {strategy: "mean|median|mode|ffill|bfill|value", value: any}
+      - fill_nulls:       params = {strategy: "mean|median|mode|ffill|bfill|value|from_column",
+                                    value: any,            # for strategy=value
+                                    source_column: str}    # for strategy=from_column
+      - extract:          params = {pattern: str,          # regex pattern
+                                    target_column: str,    # column to write result into (new or existing)
+                                    group: int}            # capture group index (default 0 = full match)
       - drop_duplicates:  params = {subset: [col, ...]} (optional)
       - sort:             params = {column: str, ascending: bool}
     """
@@ -83,7 +88,32 @@ def transform_columns(file_path: str, operations: list[dict], output_file: str) 
                 if fill_val is None:
                     raise ToolError("fill_nulls with strategy='value' requires params.value")
                 df[col] = df[col].fillna(fill_val)
+            elif strategy == "from_column":
+                src = params.get("source_column")
+                if not src:
+                    raise ToolError("fill_nulls with strategy='from_column' requires params.source_column")
+                validate_columns_exist(df, [src])
+                df[col] = df[col].fillna(df[src])
             applied.append(f"Filled {null_before} nulls in '{col}' using {strategy}")
+
+        elif operation == "extract":
+            validate_columns_exist(df, [col])
+            pattern = params.get("pattern")
+            target_col = params.get("target_column")
+            if not pattern:
+                raise ToolError("extract operation requires params.pattern (a regex string)")
+            if not target_col:
+                raise ToolError("extract operation requires params.target_column")
+            group = params.get("group", 0)
+            try:
+                extracted = df[col].astype(str).str.extract(f"({pattern})", expand=False)
+                if group > 0:
+                    extracted = df[col].astype(str).str.extract(pattern, expand=True).iloc[:, group - 1]
+                df[target_col] = extracted
+            except Exception as e:
+                raise ToolError(f"extract failed on column '{col}' with pattern '{pattern}': {e}")
+            filled = df[target_col].notna().sum()
+            applied.append(f"Extracted pattern from '{col}' into '{target_col}' ({filled} values)")
 
         elif operation == "drop_duplicates":
             before = len(df)

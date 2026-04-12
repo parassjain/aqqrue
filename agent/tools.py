@@ -73,11 +73,21 @@ def transform_columns(file_path: str, operations: list[dict]) -> dict:
     """Apply column-level transformations in sequence.
     Each operation: {operation: str, column: str, params: dict}.
     Operations:
-      rename       -> params: {new_name: str}
-      cast_type    -> params: {target_type: int|float|str|bool|datetime}
-      fill_nulls   -> params: {strategy: mean|median|mode|ffill|bfill|value, value?: any}
+      rename          -> params: {new_name: str}
+      cast_type       -> params: {target_type: int|float|str|bool|datetime}
+      fill_nulls      -> params: {strategy: mean|median|mode|ffill|bfill|value|from_column,
+                                  value?: any,           (for strategy=value)
+                                  source_column?: str}   (for strategy=from_column — fill nulls using another column)
+      extract         -> params: {pattern: str,          (regex to extract from `column`)
+                                  target_column: str,    (new or existing column to write extracted value into)
+                                  group?: int}           (capture group index, default 0 = full match)
       drop_duplicates -> params: {subset?: [col,...]}
-      sort         -> params: {column: str, ascending?: bool}"""
+      sort            -> params: {column: str, ascending?: bool}
+
+    Tip — to fill nulls from another column's text (e.g. extract merchant from narration):
+      1. extract: pull the relevant text from the source column into a temp column
+      2. fill_nulls with strategy=from_column pointing at the temp column
+      3. (optional) drop the temp column with a second transform call"""
     from tools.transform import transform_columns as _transform
     return _transform(file_path, operations, _out("transform", file_path))
 
