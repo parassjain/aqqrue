@@ -7,6 +7,7 @@ import os
 import uuid
 import shutil
 from pathlib import Path
+from typing import Optional
 
 from langchain_core.tools import tool
 
@@ -29,7 +30,7 @@ def _out(tool_name: str, input_file: str, ext: str = "csv") -> str:
 # ---------------------------------------------------------------------------
 
 @tool
-def provide_plan(steps: list, clarification_needed: bool = False, questions: list = None) -> dict:
+def provide_plan(steps: list[dict], clarification_needed: bool = False, questions: Optional[list[str]] = None) -> dict:
     """MUST be called first before any data operation. Presents the step-by-step plan to the user.
     steps: list of {step_number: int, description: str, tool_to_use: str}.
     Set clarification_needed=true if the task is ambiguous and list your questions."""
@@ -58,7 +59,7 @@ def get_csv_schema(file_path: str) -> dict:
 # ---------------------------------------------------------------------------
 
 @tool
-def filter_rows(file_path: str, conditions: list) -> dict:
+def filter_rows(file_path: str, conditions: list[dict]) -> dict:
     """Filter rows by one or more conditions (AND logic).
     Each condition: {column: str, operator: str, value: any}.
     Operators: ==, !=, >, <, >=, <=, contains, startswith, isnull, notnull.
@@ -68,7 +69,7 @@ def filter_rows(file_path: str, conditions: list) -> dict:
 
 
 @tool
-def transform_columns(file_path: str, operations: list) -> dict:
+def transform_columns(file_path: str, operations: list[dict]) -> dict:
     """Apply column-level transformations in sequence.
     Each operation: {operation: str, column: str, params: dict}.
     Operations:
@@ -82,7 +83,7 @@ def transform_columns(file_path: str, operations: list) -> dict:
 
 
 @tool
-def aggregate_data(file_path: str, group_by_columns: list, aggregations: dict) -> dict:
+def aggregate_data(file_path: str, group_by_columns: list[str], aggregations: dict) -> dict:
     """Group rows by columns and aggregate numeric columns.
     aggregations: {column_name: [list of functions]}.
     Functions: sum, mean, median, min, max, count, std, first, last.
@@ -93,7 +94,7 @@ def aggregate_data(file_path: str, group_by_columns: list, aggregations: dict) -
 
 
 @tool
-def describe_statistics(file_path: str, columns: list = None) -> dict:
+def describe_statistics(file_path: str, columns: Optional[list[str]] = None) -> dict:
     """Get summary statistics (count, mean, std, min, max, percentiles) for numeric columns.
     columns: optional list of column names. Defaults to all numeric columns. Read-only."""
     from tools.aggregate import describe_statistics as _stats
