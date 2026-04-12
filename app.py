@@ -24,6 +24,7 @@ from agent.planner import (
     FinalResponse,
     AgentError,
     UndoPerformed,
+    TokenUsageUpdate,
 )
 from config import LLM_PROVIDER, MODEL_NAME
 
@@ -51,6 +52,7 @@ _DEFAULTS: dict = {
     "file_history": [],        # list[str] — stack of output/ paths for undo support
     "session_id": None,        # str — UUID for this upload session
     "uploaded_filename": None, # str — original filename for display
+    "session_tokens": {"input": 0, "output": 0, "total": 0},  # cumulative token usage
 }
 for _k, _v in _DEFAULTS.items():
     if _k not in st.session_state:
@@ -105,6 +107,13 @@ with st.sidebar:
             for _k, _v in _DEFAULTS.items():
                 st.session_state[_k] = _v
             st.rerun()
+        st.divider()
+        st.caption("**Session token usage**")
+        tok = st.session_state.session_tokens
+        col1, col2 = st.columns(2)
+        col1.metric("Input", f"{tok['input']:,}")
+        col2.metric("Output", f"{tok['output']:,}")
+        st.caption(f"Total: **{tok['total']:,}**")
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -148,6 +157,11 @@ def _render_ui_message(msg: dict) -> None:
             st.json(stat["data"])
     if msg.get("error"):
         st.error(msg["error"])
+    if msg.get("token_usage"):
+        tu = msg["token_usage"]
+        st.caption(
+            f"Tokens — {tu['input']:,} input · {tu['output']:,} output · **{tu['total']:,} total**"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -179,6 +193,7 @@ if user_input:
         "charts": [],
         "stats": [],
         "error": "",
+        "token_usage": None,
     }
 
     with st.chat_message("assistant"):
@@ -264,6 +279,17 @@ if user_input:
                         progress_md.append(f"↩️ Undone — restored to: `{os.path.basename(event.restored_file)}`")
                         _refresh_progress()
                         assistant_ui["text"] = f"Undone. Restored to the previous state: `{os.path.basename(event.restored_file)}`"
+
+                    elif isinstance(event, TokenUsageUpdate):
+                        tu = {"input": event.input_tokens, "output": event.output_tokens, "total": event.total_tokens}
+                        assistant_ui["token_usage"] = tu
+                        # Accumulate session-level totals
+                        st.session_state.session_tokens["input"] += event.input_tokens
+                        st.session_state.session_tokens["output"] += event.output_tokens
+                        st.session_state.session_tokens["total"] += event.total_tokens
+                        final_placeholder.caption(
+                            f"Tokens — {event.input_tokens:,} input · {event.output_tokens:,} output · **{event.total_tokens:,} total**"
+                        )
 
                     elif isinstance(event, AgentError):
                         status_box.update(label="Error ❌", state="error", expanded=True)

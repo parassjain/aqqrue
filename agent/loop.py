@@ -32,6 +32,7 @@ from agent.planner import (
     FinalResponse,
     AgentError,
     UndoPerformed,
+    TokenUsageUpdate,
 )
 from tools.csv_io import get_schema
 
@@ -65,6 +66,8 @@ def run(
 
     plan: Plan | None = None
     new_messages: list[BaseMessage] = []  # messages added by nodes this turn
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
 
     try:
         for chunk in graph.stream(
@@ -148,6 +151,12 @@ def run(
                 new_messages.extend(agent_messages)
 
                 for msg in agent_messages:
+                    if isinstance(msg, AIMessage):
+                        usage = getattr(msg, "usage_metadata", None) or {}
+                        total_input_tokens += usage.get("input_tokens", 0)
+                        total_output_tokens += usage.get("output_tokens", 0)
+
+                for msg in agent_messages:
                     if isinstance(msg, AIMessage) and not msg.tool_calls:
                         # No more tool calls → this is the final text response
                         text = msg.content if isinstance(msg.content, str) else str(msg.content)
@@ -161,6 +170,13 @@ def run(
         # Includes: current HumanMessage + all AIMessages + all ToolMessages.
         conversation_history.append(current_user_msg)
         conversation_history.extend(new_messages)
+
+    if total_input_tokens or total_output_tokens:
+        yield TokenUsageUpdate(
+            input_tokens=total_input_tokens,
+            output_tokens=total_output_tokens,
+            total_tokens=total_input_tokens + total_output_tokens,
+        )
 
 
 # ---------------------------------------------------------------------------

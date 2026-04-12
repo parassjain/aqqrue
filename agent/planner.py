@@ -127,3 +127,10 @@ class AgentError:
 class UndoPerformed:
     restored_file: str
     message: str
+
+
+@dataclass
+class TokenUsageUpdate:
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
