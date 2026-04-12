@@ -199,6 +199,7 @@ if user_input:
     with st.chat_message("assistant"):
         status_box = st.status("Thinking…", expanded=True)
         final_placeholder = st.empty()
+        token_placeholder = st.empty()
 
         with status_box:
             progress_md: list[str] = []
@@ -287,7 +288,7 @@ if user_input:
                         st.session_state.session_tokens["input"] += event.input_tokens
                         st.session_state.session_tokens["output"] += event.output_tokens
                         st.session_state.session_tokens["total"] += event.total_tokens
-                        final_placeholder.caption(
+                        token_placeholder.caption(
                             f"Tokens — {event.input_tokens:,} input · {event.output_tokens:,} output · **{event.total_tokens:,} total**"
                         )
 
