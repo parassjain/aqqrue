@@ -172,18 +172,27 @@ left_col, right_col = st.columns([1.1, 1], gap="large")
 # ── Left: live CSV preview ──────────────────────────────────────────────────
 with left_col:
     st.subheader("Live Data Preview")
-    if st.session_state.working_file:
-        try:
-            df_live = pd.read_csv(st.session_state.working_file)
+    _csv_preview = st.empty()  # placeholder updated live as operations complete
+
+
+def _update_csv_preview(file_path: str) -> None:
+    """Re-render the left-column data table from the given CSV path."""
+    try:
+        df = pd.read_csv(file_path)
+        with _csv_preview.container():
             st.caption(
                 f"**{st.session_state.uploaded_filename}** · "
-                f"{len(df_live):,} rows × {len(df_live.columns)} cols"
+                f"{len(df):,} rows × {len(df.columns)} cols"
             )
-            st.dataframe(df_live, use_container_width=True, height=600)
-        except Exception as exc:
-            st.error(f"Could not read current file: {exc}")
-    else:
-        st.info("Upload a CSV file in the sidebar to get started.")
+            st.dataframe(df, use_container_width=True, height=600)
+    except Exception as exc:
+        _csv_preview.error(f"Could not read file: {exc}")
+
+
+if st.session_state.working_file:
+    _update_csv_preview(st.session_state.working_file)
+else:
+    _csv_preview.info("Upload a CSV file in the sidebar to get started.")
 
 # ── Right: chat interface ───────────────────────────────────────────────────
 with right_col:
@@ -254,6 +263,8 @@ with right_col:
 
                             elif isinstance(event, DataFrameResult):
                                 if event.output_file:
+                                    st.session_state.working_file = event.output_file
+                                    _update_csv_preview(event.output_file)
                                     try:
                                         preview = pd.read_csv(event.output_file).head(10)
                                         st.caption(f"📄 {event.message}")
@@ -293,6 +304,7 @@ with right_col:
 
                             elif isinstance(event, UndoPerformed):
                                 st.session_state.working_file = event.restored_file
+                                _update_csv_preview(event.restored_file)
                                 progress_md.append(f"↩️ Undone — restored to: `{os.path.basename(event.restored_file)}`")
                                 _refresh_progress()
                                 assistant_ui["text"] = f"Undone. Restored to the previous state: `{os.path.basename(event.restored_file)}`"
