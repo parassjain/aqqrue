@@ -86,7 +86,7 @@ with st.sidebar:
                 st.dataframe(
                     pd.DataFrame({
                         "Column": df_prev.columns,
-                        "Type": df_prev.dtypes.values,
+                        "Type": df_prev.dtypes.astype(str).values,
                         "Nulls": df_prev.isnull().sum().values,
                     }),
                     use_container_width=True,
