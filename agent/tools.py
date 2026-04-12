@@ -1,270 +1,156 @@
 """
-Anthropic tool schema definitions and TOOL_REGISTRY.
-
-Schemas are passed to client.messages.create(tools=[...]).
-TOOL_REGISTRY maps tool name → Python implementation callable.
+LangChain @tool definitions wrapping the tools/ data functions.
+Output paths are auto-generated (UUID-based) so the LLM never has to specify them.
 """
 
-from tools.csv_io import get_schema
-from tools.filter import filter_rows
-from tools.transform import transform_columns
-from tools.aggregate import group_by_aggregate, describe_statistics
-from tools.charts import generate_chart
+import os
+import uuid
+import shutil
+from pathlib import Path
 
-# ---------------------------------------------------------------------------
-# Tool schema definitions (Anthropic format)
-# ---------------------------------------------------------------------------
+from langchain_core.tools import tool
 
-TOOL_DEFINITIONS = [
-    {
-        "name": "provide_plan",
-        "description": (
-            "MUST be called first, before any data operation. "
-            "Presents the step-by-step execution plan to the user. "
-            "Use clarification_needed=true if the task is ambiguous and you need more info."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "steps": {
-                    "type": "array",
-                    "description": "Ordered list of steps you will execute.",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "step_number": {"type": "integer"},
-                            "description": {"type": "string", "description": "What this step does in plain English."},
-                            "tool_to_use": {"type": "string", "description": "Name of the tool this step will call."},
-                        },
-                        "required": ["step_number", "description", "tool_to_use"],
-                    },
-                },
-                "clarification_needed": {
-                    "type": "boolean",
-                    "description": "Set to true if you need clarification before executing.",
-                },
-                "questions": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Questions to ask the user if clarification_needed is true.",
-                },
-            },
-            "required": ["steps"],
-        },
-    },
-    {
-        "name": "get_csv_schema",
-        "description": (
-            "Read the schema of the current working CSV. "
-            "Returns column names, dtypes, row count, null counts, and 3 sample rows. "
-            "Call this before planning to understand the data structure."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "file_path": {
-                    "type": "string",
-                    "description": "Absolute path to the CSV file in the output/ directory.",
-                },
-            },
-            "required": ["file_path"],
-        },
-    },
-    {
-        "name": "filter_rows",
-        "description": "Filter rows based on one or more conditions. Returns a new CSV with only matching rows.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "file_path": {"type": "string", "description": "Path to input CSV in output/."},
-                "conditions": {
-                    "type": "array",
-                    "description": "List of filter conditions (all must be true — AND logic).",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "column": {"type": "string"},
-                            "operator": {
-                                "type": "string",
-                                "enum": ["==", "!=", ">", "<", ">=", "<=", "contains", "startswith", "isnull", "notnull"],
-                            },
-                            "value": {"description": "The comparison value (omit for isnull/notnull)."},
-                        },
-                        "required": ["column", "operator"],
-                    },
-                },
-                "output_file": {"type": "string", "description": "Absolute path for the output CSV in output/."},
-            },
-            "required": ["file_path", "conditions", "output_file"],
-        },
-    },
-    {
-        "name": "transform_columns",
-        "description": (
-            "Apply column-level transformations: rename, cast type, fill nulls, drop duplicates, sort. "
-            "Multiple operations can be batched in a single call."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "file_path": {"type": "string"},
-                "operations": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "operation": {
-                                "type": "string",
-                                "enum": ["rename", "cast_type", "fill_nulls", "drop_duplicates", "sort"],
-                            },
-                            "column": {"type": "string", "description": "Target column (not needed for drop_duplicates)."},
-                            "params": {
-                                "type": "object",
-                                "description": (
-                                    "rename: {new_name} | "
-                                    "cast_type: {target_type: int|float|str|bool|datetime} | "
-                                    "fill_nulls: {strategy: mean|median|mode|ffill|bfill|value, value?} | "
-                                    "drop_duplicates: {subset?: [col,...]} | "
-                                    "sort: {column, ascending?: bool}"
-                                ),
-                            },
-                        },
-                        "required": ["operation"],
-                    },
-                },
-                "output_file": {"type": "string"},
-            },
-            "required": ["file_path", "operations", "output_file"],
-        },
-    },
-    {
-        "name": "aggregate_data",
-        "description": "Group rows by columns and aggregate numeric columns. Returns a summarized CSV.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "file_path": {"type": "string"},
-                "group_by_columns": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Columns to group by.",
-                },
-                "aggregations": {
-                    "type": "object",
-                    "description": "Mapping of column_name → list of agg functions. E.g. {\"amount\": [\"sum\", \"mean\"]}",
-                    "additionalProperties": {
-                        "type": "array",
-                        "items": {
-                            "type": "string",
-                            "enum": ["sum", "mean", "median", "min", "max", "count", "std", "first", "last"],
-                        },
-                    },
-                },
-                "output_file": {"type": "string"},
-            },
-            "required": ["file_path", "group_by_columns", "aggregations", "output_file"],
-        },
-    },
-    {
-        "name": "describe_statistics",
-        "description": "Get summary statistics (count, mean, std, min, max, percentiles) for numeric columns. Read-only — does not create a file.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "file_path": {"type": "string"},
-                "columns": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Columns to describe. Defaults to all numeric columns if omitted.",
-                },
-            },
-            "required": ["file_path"],
-        },
-    },
-    {
-        "name": "generate_chart",
-        "description": "Generate an interactive Plotly chart from CSV data and save it for display.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "file_path": {"type": "string"},
-                "chart_type": {
-                    "type": "string",
-                    "enum": ["bar", "line", "scatter", "histogram", "pie", "heatmap"],
-                },
-                "x_column": {"type": "string", "description": "Column for the X axis (or labels for pie)."},
-                "output_file": {"type": "string", "description": "Path for output JSON chart file in output/charts/."},
-                "y_column": {"type": "string", "description": "Column for Y axis (required for bar/line/scatter/pie)."},
-                "title": {"type": "string"},
-                "color_column": {"type": "string", "description": "Column to use for color grouping."},
-                "top_n": {"type": "integer", "description": "Limit to top N rows by y_column before charting."},
-            },
-            "required": ["file_path", "chart_type", "x_column", "output_file"],
-        },
-    },
-    {
-        "name": "save_result",
-        "description": "Copy the current working CSV to a user-friendly named file in output/.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "file_path": {"type": "string", "description": "Current working CSV path."},
-                "output_filename": {"type": "string", "description": "Desired filename (e.g. 'sales_filtered.csv')."},
-            },
-            "required": ["file_path", "output_filename"],
-        },
-    },
-]
+_OUTPUT_DIR = str(Path(__file__).parent.parent / "output")
+
+
+def _out(tool_name: str, input_file: str, ext: str = "csv") -> str:
+    """Generate a unique output path in output/ for this tool invocation."""
+    base = os.path.splitext(os.path.basename(input_file))[0]
+    uid = uuid.uuid4().hex[:6]
+    if ext == "json":
+        charts_dir = os.path.join(_OUTPUT_DIR, "charts")
+        os.makedirs(charts_dir, exist_ok=True)
+        return os.path.join(charts_dir, f"{uid}_{tool_name}_{base}.json")
+    return os.path.join(_OUTPUT_DIR, f"{uid}_{tool_name}_{base}.{ext}")
 
 
 # ---------------------------------------------------------------------------
-# Tool dispatch registry
+# Planning tool — MUST be called first
 # ---------------------------------------------------------------------------
 
-def _save_result(file_path: str, output_filename: str) -> dict:
-    """Copy the current file to a named output path."""
-    import shutil
-    import os
-    from pathlib import Path
-    from tools.safety import validate_file_exists, validate_output_path
-
-    resolved_src = validate_file_exists(file_path)
-    output_dir = str(Path(__file__).parent.parent / "output")
-    dest = os.path.join(output_dir, output_filename)
-    validate_output_path(dest)
-    shutil.copy2(resolved_src, dest)
+@tool
+def provide_plan(steps: list, clarification_needed: bool = False, questions: list = None) -> dict:
+    """MUST be called first before any data operation. Presents the step-by-step plan to the user.
+    steps: list of {step_number: int, description: str, tool_to_use: str}.
+    Set clarification_needed=true if the task is ambiguous and list your questions."""
     return {
         "status": "success",
-        "message": f"Saved result to '{output_filename}'",
+        "steps": steps or [],
+        "clarification_needed": clarification_needed,
+        "questions": questions or [],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Inspection
+# ---------------------------------------------------------------------------
+
+@tool
+def get_csv_schema(file_path: str) -> dict:
+    """Read CSV schema: column names, dtypes, row count, null counts, and 3 sample rows.
+    Always call this before provide_plan to understand the data structure."""
+    from tools.csv_io import get_schema
+    return get_schema(file_path)
+
+
+# ---------------------------------------------------------------------------
+# Data operations
+# ---------------------------------------------------------------------------
+
+@tool
+def filter_rows(file_path: str, conditions: list) -> dict:
+    """Filter rows by one or more conditions (AND logic).
+    Each condition: {column: str, operator: str, value: any}.
+    Operators: ==, !=, >, <, >=, <=, contains, startswith, isnull, notnull.
+    Returns path to new CSV with only matching rows."""
+    from tools.filter import filter_rows as _filter
+    return _filter(file_path, conditions, _out("filter", file_path))
+
+
+@tool
+def transform_columns(file_path: str, operations: list) -> dict:
+    """Apply column-level transformations in sequence.
+    Each operation: {operation: str, column: str, params: dict}.
+    Operations:
+      rename       -> params: {new_name: str}
+      cast_type    -> params: {target_type: int|float|str|bool|datetime}
+      fill_nulls   -> params: {strategy: mean|median|mode|ffill|bfill|value, value?: any}
+      drop_duplicates -> params: {subset?: [col,...]}
+      sort         -> params: {column: str, ascending?: bool}"""
+    from tools.transform import transform_columns as _transform
+    return _transform(file_path, operations, _out("transform", file_path))
+
+
+@tool
+def aggregate_data(file_path: str, group_by_columns: list, aggregations: dict) -> dict:
+    """Group rows by columns and aggregate numeric columns.
+    aggregations: {column_name: [list of functions]}.
+    Functions: sum, mean, median, min, max, count, std, first, last.
+    Example: {"amount": ["sum", "mean"], "quantity": ["count"]}.
+    Returns path to aggregated CSV."""
+    from tools.aggregate import group_by_aggregate
+    return group_by_aggregate(file_path, group_by_columns, aggregations, _out("aggregate", file_path))
+
+
+@tool
+def describe_statistics(file_path: str, columns: list = None) -> dict:
+    """Get summary statistics (count, mean, std, min, max, percentiles) for numeric columns.
+    columns: optional list of column names. Defaults to all numeric columns. Read-only."""
+    from tools.aggregate import describe_statistics as _stats
+    return _stats(file_path, columns)
+
+
+@tool
+def generate_chart(
+    file_path: str,
+    chart_type: str,
+    x_column: str,
+    y_column: str = None,
+    title: str = None,
+    color_column: str = None,
+    top_n: int = None,
+) -> dict:
+    """Generate an interactive Plotly chart from CSV data.
+    chart_type: bar, line, scatter, histogram, pie, heatmap.
+    y_column is required for bar, line, scatter, and pie charts.
+    color_column: optional column for color grouping.
+    top_n: limit to top N rows by y_column before charting."""
+    from tools.charts import generate_chart as _chart
+    return _chart(
+        file_path, chart_type, x_column,
+        _out("chart", file_path, "json"),
+        y_column=y_column, title=title,
+        color_column=color_column, top_n=top_n,
+    )
+
+
+@tool
+def save_result(file_path: str, output_filename: str) -> dict:
+    """Save the current working CSV to output/ with a meaningful filename.
+    output_filename: desired name, e.g. 'sales_filtered.csv'."""
+    from tools.safety import validate_file_exists, validate_output_path
+    src = validate_file_exists(file_path)
+    dest = os.path.join(_OUTPUT_DIR, output_filename)
+    validate_output_path(dest)
+    shutil.copy2(src, dest)
+    return {
+        "status": "success",
+        "message": f"Saved result as '{output_filename}'",
         "output_file": dest,
     }
 
 
-def _provide_plan(steps: list, clarification_needed: bool = False, questions: list | None = None) -> dict:
-    """Acknowledge plan receipt (the agent loop handles rendering)."""
-    return {
-        "status": "success",
-        "message": "Plan received and displayed to user.",
-        "step_count": len(steps),
-    }
+# ---------------------------------------------------------------------------
+# Registry — order matters for the system prompt tool reference table
+# ---------------------------------------------------------------------------
 
-
-TOOL_REGISTRY: dict = {
-    "provide_plan": _provide_plan,
-    "get_csv_schema": lambda file_path: get_schema(file_path),
-    "filter_rows": filter_rows,
-    "transform_columns": transform_columns,
-    "aggregate_data": group_by_aggregate,
-    "describe_statistics": describe_statistics,
-    "generate_chart": generate_chart,
-    "save_result": _save_result,
-}
-
-
-def dispatch(tool_name: str, tool_input: dict) -> dict:
-    """Look up and call the tool, returning a result dict."""
-    fn = TOOL_REGISTRY.get(tool_name)
-    if fn is None:
-        from tools.safety import ToolError
-        raise ToolError(f"Unknown tool '{tool_name}'")
-    return fn(**tool_input)
+ALL_TOOLS = [
+    provide_plan,
+    get_csv_schema,
+    filter_rows,
+    transform_columns,
+    aggregate_data,
+    describe_statistics,
+    generate_chart,
+    save_result,
+]

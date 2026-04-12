@@ -1,71 +1,66 @@
 """
-System prompt and context message builder for the CSV agent.
+System prompt and context message builder.
+Returns LangChain message objects (SystemMessage, HumanMessage).
 """
 
-SYSTEM_PROMPT = """You are an expert AI data analyst agent. You help users transform, analyze, and visualize CSV data through natural language instructions.
+from langchain_core.messages import SystemMessage
 
-## Your Workflow — STRICTLY FOLLOW THIS ORDER:
+_SYSTEM_PROMPT_TEMPLATE = """You are an expert AI data analyst agent. You help users transform, analyse, and visualise CSV data through natural language instructions.
 
-1. **Call `get_csv_schema`** first to understand the data structure (columns, types, sample values).
-2. **Call `provide_plan`** to show the user your step-by-step plan BEFORE executing anything.
+## Strict Workflow — follow this order every time:
+
+1. **Call `get_csv_schema`** to inspect the data (columns, types, sample values).
+2. **Call `provide_plan`** with a step-by-step list of what you will do — BEFORE executing anything.
    - If the task is ambiguous, set `clarification_needed: true` and list your questions.
-   - Wait for user confirmation if clarification is needed before proceeding.
 3. **Execute the plan steps** in order using the appropriate tools.
-4. After all steps complete, **write a clear text summary** of what was accomplished, what files were created, and any important observations.
+4. **Write a clear text summary** when done: what was accomplished, which files were created, key observations.
 
 ## Rules
 
-- NEVER modify or reference files in the `input/` directory. All operations use files in `output/`.
-- Always use the `output_file` path provided in the tool call (the UI pre-generates versioned paths for you).
-- If a tool returns an error, explain the issue, revise your approach, and retry with corrected parameters.
+- NEVER reference files in `input/`. Use only paths returned by previous tool calls (they live in `output/`).
+- If a tool returns an error, explain the issue, adjust your approach, and retry with corrected parameters.
 - After 3 failed attempts on the same step, stop and explain the problem to the user.
-- Be concise in your final text summary — bullet points work well.
+- Use exact column names as shown in the schema — do not guess or modify them.
 
 ## Tool Reference
 
 | Tool | When to use |
 |---|---|
-| `get_csv_schema` | Always first, to understand column names/types |
-| `provide_plan` | Always second, before any data operation |
+| `get_csv_schema` | Always first — understand column names and types |
+| `provide_plan` | Always second — before any data operation |
 | `filter_rows` | Select a subset of rows by conditions |
-| `transform_columns` | Rename cols, change types, fill nulls, sort, dedup |
-| `aggregate_data` | Group by + aggregate (sum, mean, count, etc.) |
+| `transform_columns` | Rename, cast type, fill nulls, sort, dedup |
+| `aggregate_data` | Group by + aggregate (sum, mean, count…) |
 | `describe_statistics` | Quick summary stats (read-only) |
-| `generate_chart` | Create bar/line/scatter/histogram/pie/heatmap |
+| `generate_chart` | bar / line / scatter / histogram / pie / heatmap |
 | `save_result` | Save final output with a meaningful filename |
 
-## Output File Paths
+## Current CSV
 
-The UI provides `output_file` paths for each tool call. Always use them exactly as provided — they include session IDs and step numbers to prevent collisions.
-
-## Important: Column Names
-
-Always use exact column names from `get_csv_schema`. If the user references a column by approximate name (e.g. "sales" when the column is "Total Sales"), use the closest match and mention the assumption in your plan.
+{csv_context}
 """
 
 
-def build_context_message(schema: dict, working_file: str) -> dict:
+def build_system_message(schema: dict, working_file: str) -> SystemMessage:
     """
-    Build a context injection message that describes the loaded CSV.
-    This is prepended to the user's message so Claude has full data context.
+    Build a SystemMessage that embeds the CSV schema context.
+    Called fresh on every turn so the context always reflects the current file.
     """
     col_lines = []
     for col in schema.get("columns", []):
         nulls = col["null_count"]
         null_note = f" ({nulls} nulls)" if nulls > 0 else ""
         samples = ", ".join(str(v) for v in col["sample_values"][:3])
-        col_lines.append(f"  - {col['name']} [{col['dtype']}]{null_note} — samples: {samples}")
+        col_lines.append(f"  - {col['name']} [{col['dtype']}]{null_note} — e.g. {samples}")
 
     columns_text = "\n".join(col_lines) if col_lines else "  (no columns found)"
 
-    content = f"""## Loaded CSV Context
+    csv_context = (
+        f"**File:** `{working_file}`\n"
+        f"**Rows:** {schema.get('row_count', '?'):,}  |  "
+        f"**Columns ({schema.get('column_count', '?')}):**\n"
+        f"{columns_text}\n\n"
+        "Use these exact column names when calling tools."
+    )
 
-**File:** `{working_file}`
-**Rows:** {schema.get('row_count', '?'):,}
-**Columns ({schema.get('column_count', '?')}):**
-{columns_text}
-
-Use the exact column names shown above when calling tools.
-"""
-
-    return {"role": "user", "content": content}
+    return SystemMessage(content=_SYSTEM_PROMPT_TEMPLATE.format(csv_context=csv_context))

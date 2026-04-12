@@ -1,22 +1,21 @@
 """
-Streamlit entry point for the AI CSV Workflow Agent.
-Run with: streamlit run app.py
+Streamlit entry point — CSV AI Agent.
+Run: streamlit run app.py
 """
 
 import os
 import shutil
 import uuid
-import json
 from pathlib import Path
 
 import pandas as pd
 import plotly.io as pio
 import streamlit as st
+from langchain_core.messages import BaseMessage
 
-from agent import loop as agent_loop
+import agent.loop as agent_loop
 from agent.planner import (
     PlanCreated,
-    PlanStepStarted,
     PlanStepCompleted,
     PlanStepFailed,
     DataFrameResult,
@@ -25,6 +24,7 @@ from agent.planner import (
     FinalResponse,
     AgentError,
 )
+from config import LLM_PROVIDER, MODEL_NAME
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -38,112 +38,73 @@ _OUTPUT_DIR.mkdir(exist_ok=True)
 # ---------------------------------------------------------------------------
 # Page config
 # ---------------------------------------------------------------------------
-st.set_page_config(
-    page_title="CSV AI Agent",
-    page_icon="📊",
-    layout="wide",
-)
+st.set_page_config(page_title="CSV AI Agent", page_icon="📊", layout="wide")
 
 # ---------------------------------------------------------------------------
-# Session state initialisation
+# Session state
 # ---------------------------------------------------------------------------
-defaults = {
-    "messages": [],           # Claude API conversation history
-    "ui_messages": [],        # Rendered chat log for display
-    "working_file": None,     # Current output/ CSV path
-    "session_id": None,       # UUID for this upload session
-    "uploaded_filename": None,
-    "step_counter": [0],      # Mutable counter for versioned output paths
+_DEFAULTS: dict = {
+    "messages": [],            # list[BaseMessage] — full LangChain conversation history
+    "ui_messages": [],         # list[dict] — rendered chat log
+    "working_file": None,      # str | None — current output/ CSV path
+    "session_id": None,        # str — UUID for this upload session
+    "uploaded_filename": None, # str — original filename for display
 }
-for k, v in defaults.items():
-    if k not in st.session_state:
-        st.session_state[k] = v
+for _k, _v in _DEFAULTS.items():
+    if _k not in st.session_state:
+        st.session_state[_k] = _v
 
 # ---------------------------------------------------------------------------
-# Sidebar — file upload
+# Sidebar
 # ---------------------------------------------------------------------------
 with st.sidebar:
     st.title("📊 CSV AI Agent")
-    st.caption("Upload a CSV, then describe what you want done.")
+    st.caption(f"Model: **{MODEL_NAME}** via **{LLM_PROVIDER}**")
+    st.divider()
 
-    uploaded = st.file_uploader("Upload CSV", type=["csv"], key="file_uploader")
+    uploaded = st.file_uploader("Upload a CSV file", type=["csv"])
 
     if uploaded and uploaded.name != st.session_state.uploaded_filename:
-        # New file — reset session
-        session_id = uuid.uuid4().hex[:8]
-        st.session_state.session_id = session_id
+        sid = uuid.uuid4().hex[:8]
+        st.session_state.session_id = sid
         st.session_state.uploaded_filename = uploaded.name
         st.session_state.messages = []
         st.session_state.ui_messages = []
-        st.session_state.step_counter = [0]
 
         # Save original to input/ (immutable)
-        input_path = _INPUT_DIR / f"{session_id}_{uploaded.name}"
-        input_path.write_bytes(uploaded.getvalue())
+        (_INPUT_DIR / f"{sid}_{uploaded.name}").write_bytes(uploaded.getvalue())
 
-        # Copy to output/ (working copy)
-        output_path = _OUTPUT_DIR / f"{session_id}_{uploaded.name}"
-        shutil.copy2(input_path, output_path)
-        st.session_state.working_file = str(output_path)
+        # Working copy in output/
+        out_path = _OUTPUT_DIR / f"{sid}_{uploaded.name}"
+        shutil.copy2(_INPUT_DIR / f"{sid}_{uploaded.name}", out_path)
+        st.session_state.working_file = str(out_path)
 
-        # Show schema preview
         try:
-            df_preview = pd.read_csv(str(output_path))
-            st.success(f"Loaded: **{uploaded.name}**  \n{len(df_preview):,} rows × {len(df_preview.columns)} columns")
+            df_prev = pd.read_csv(str(out_path))
+            st.success(f"**{uploaded.name}**\n{len(df_prev):,} rows × {len(df_prev.columns)} columns")
             with st.expander("Column preview", expanded=False):
-                col_info = pd.DataFrame({
-                    "Column": df_preview.columns,
-                    "Type": df_preview.dtypes.values,
-                    "Nulls": df_preview.isnull().sum().values,
-                })
-                st.dataframe(col_info, use_container_width=True, hide_index=True)
-        except Exception as e:
-            st.error(f"Could not read CSV: {e}")
+                st.dataframe(
+                    pd.DataFrame({
+                        "Column": df_prev.columns,
+                        "Type": df_prev.dtypes.values,
+                        "Nulls": df_prev.isnull().sum().values,
+                    }),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+        except Exception as exc:
+            st.error(f"Could not read CSV: {exc}")
 
     if st.session_state.working_file:
         st.divider()
         if st.button("🗑️ Clear session", use_container_width=True):
-            for key in list(defaults.keys()):
-                st.session_state[key] = defaults[key]
+            for _k, _v in _DEFAULTS.items():
+                st.session_state[_k] = _v
             st.rerun()
 
 # ---------------------------------------------------------------------------
-# Main chat area
+# Helpers
 # ---------------------------------------------------------------------------
-st.header("Chat with your data")
-
-def _render_ui_message(msg: dict) -> None:
-    """Render a stored UI message."""
-    if msg.get("text"):
-        st.markdown(msg["text"])
-    if msg.get("plan_markdown"):
-        st.markdown(msg["plan_markdown"])
-    if msg.get("dataframes"):
-        for df_info in msg["dataframes"]:
-            st.caption(df_info["caption"])
-            st.dataframe(df_info["data"], use_container_width=True)
-            if df_info.get("download_path"):
-                _offer_download(df_info["download_path"], df_info.get("label", "Download CSV"))
-    if msg.get("charts"):
-        for chart_info in msg["charts"]:
-            try:
-                fig = pio.from_json(open(chart_info["path"]).read())
-                st.plotly_chart(fig, use_container_width=True)
-            except Exception:
-                st.warning(f"Could not render chart: {chart_info['path']}")
-    if msg.get("stats"):
-        for stat in msg["stats"]:
-            st.caption(stat["message"])
-            st.dataframe(pd.DataFrame(stat["data"]), use_container_width=True)
-    if msg.get("error"):
-        st.error(msg["error"])
-
-
-# Re-render history properly
-for msg in st.session_state.ui_messages:
-    with st.chat_message(msg["role"]):
-        _render_ui_message(msg)
-
 
 def _offer_download(file_path: str, label: str = "Download CSV") -> None:
     try:
@@ -159,9 +120,42 @@ def _offer_download(file_path: str, label: str = "Download CSV") -> None:
         pass
 
 
+def _render_ui_message(msg: dict) -> None:
+    if msg.get("plan_markdown"):
+        st.markdown(msg["plan_markdown"])
+    if msg.get("text"):
+        st.markdown(msg["text"])
+    for df_info in msg.get("dataframes", []):
+        st.caption(df_info["caption"])
+        st.dataframe(df_info["data"], use_container_width=True)
+        if df_info.get("download_path"):
+            _offer_download(df_info["download_path"])
+    for chart_info in msg.get("charts", []):
+        try:
+            fig = pio.from_json(open(chart_info["path"]).read())
+            st.plotly_chart(fig, use_container_width=True)
+        except Exception:
+            st.warning(f"Could not render chart: {chart_info['path']}")
+    for stat in msg.get("stats", []):
+        st.caption(stat["message"])
+        try:
+            st.dataframe(pd.DataFrame(stat["data"]), use_container_width=True)
+        except Exception:
+            st.json(stat["data"])
+    if msg.get("error"):
+        st.error(msg["error"])
+
+
 # ---------------------------------------------------------------------------
-# Chat input
+# Main chat area
 # ---------------------------------------------------------------------------
+st.header("Chat with your data")
+
+# Re-render history
+for msg in st.session_state.ui_messages:
+    with st.chat_message(msg["role"]):
+        _render_ui_message(msg)
+
 if not st.session_state.working_file:
     st.info("Upload a CSV file in the sidebar to get started.")
     st.stop()
@@ -169,12 +163,10 @@ if not st.session_state.working_file:
 user_input = st.chat_input("Describe what you want to do with this data...")
 
 if user_input:
-    # Show user message
     with st.chat_message("user"):
         st.markdown(user_input)
     st.session_state.ui_messages.append({"role": "user", "text": user_input})
 
-    # Prepare UI message accumulator for this assistant turn
     assistant_ui: dict = {
         "role": "assistant",
         "text": "",
@@ -186,90 +178,91 @@ if user_input:
     }
 
     with st.chat_message("assistant"):
-        status_container = st.status("Thinking...", expanded=True)
-        final_text_placeholder = st.empty()
+        status_box = st.status("Thinking…", expanded=True)
+        final_placeholder = st.empty()
 
-        with status_container:
-            plan_placeholder = st.empty()
-            progress_lines: list[str] = []
+        with status_box:
+            progress_md: list[str] = []
+            progress_slot = st.empty()
 
-            def _update_progress(line: str) -> None:
-                progress_lines.append(line)
-                plan_placeholder.markdown("\n".join(progress_lines))
+            def _refresh_progress() -> None:
+                progress_slot.markdown("\n\n".join(progress_md))
 
             try:
                 for event in agent_loop.run(
                     user_message=user_input,
                     working_file=st.session_state.working_file,
                     conversation_history=st.session_state.messages,
-                    session_id=st.session_state.session_id,
-                    step_counter=st.session_state.step_counter,
                 ):
                     if isinstance(event, PlanCreated):
                         plan_md = event.plan.to_markdown()
-                        plan_placeholder.markdown(plan_md)
+                        progress_md.clear()
+                        progress_md.append(plan_md)
+                        _refresh_progress()
                         assistant_ui["plan_markdown"] = plan_md
-                        status_container.update(label="Executing plan...")
-
-                    elif isinstance(event, PlanStepStarted):
-                        _update_progress(f"🔄 **Step {event.step.step_number}:** {event.step.description}")
+                        status_box.update(label="Executing plan…")
 
                     elif isinstance(event, PlanStepCompleted):
-                        # Update the last progress line to show completion
-                        if progress_lines:
-                            progress_lines[-1] = f"✅ **Step {event.step.step_number}:** {event.step.description}"
-                            plan_placeholder.markdown("\n".join(progress_lines))
+                        # Update the matching line in the plan markdown to ✅
+                        updated = event.plan.to_markdown() if hasattr(event, "plan") else ""
+                        if updated:
+                            progress_md[0] = updated
+                        else:
+                            progress_md.append(f"✅ Step {event.step.step_number}: {event.step.description}")
+                        _refresh_progress()
 
                     elif isinstance(event, PlanStepFailed):
-                        if progress_lines:
-                            progress_lines[-1] = f"❌ **Step {event.step.step_number}:** {event.step.description} — {event.error}"
-                            plan_placeholder.markdown("\n".join(progress_lines))
+                        progress_md.append(f"❌ Step {event.step.step_number}: {event.error}")
+                        _refresh_progress()
 
                     elif isinstance(event, DataFrameResult):
-                        try:
-                            df = pd.read_csv(event.output_file).head(10)
-                            st.caption(f"📄 {event.message}")
-                            st.dataframe(df, use_container_width=True)
-                            _offer_download(event.output_file, "Download result CSV")
-                            assistant_ui["dataframes"].append({
-                                "caption": event.message,
-                                "data": df,
-                                "download_path": event.output_file,
-                            })
-                        except Exception as e:
-                            st.warning(f"Could not preview result: {e}")
+                        if event.output_file:
+                            try:
+                                preview = pd.read_csv(event.output_file).head(10)
+                                st.caption(f"📄 {event.message}")
+                                st.dataframe(preview, use_container_width=True)
+                                _offer_download(event.output_file)
+                                assistant_ui["dataframes"].append({
+                                    "caption": event.message,
+                                    "data": preview,
+                                    "download_path": event.output_file,
+                                })
+                            except Exception as exc:
+                                st.warning(f"Preview failed: {exc}")
 
                     elif isinstance(event, ChartGenerated):
                         try:
                             fig = pio.from_json(open(event.chart_file).read())
                             st.plotly_chart(fig, use_container_width=True)
                             assistant_ui["charts"].append({"path": event.chart_file})
-                        except Exception as e:
-                            st.warning(f"Could not render chart: {e}")
+                        except Exception as exc:
+                            st.warning(f"Chart render failed: {exc}")
 
                     elif isinstance(event, StatsResult):
                         try:
-                            stats_df = pd.DataFrame(event.statistics).round(4)
                             st.caption(f"📊 {event.message}")
-                            st.dataframe(stats_df, use_container_width=True)
-                            assistant_ui["stats"].append({"message": event.message, "data": event.statistics})
+                            st.dataframe(pd.DataFrame(event.statistics).round(4), use_container_width=True)
+                            assistant_ui["stats"].append({
+                                "message": event.message,
+                                "data": event.statistics,
+                            })
                         except Exception:
                             st.json(event.statistics)
 
                     elif isinstance(event, FinalResponse):
-                        status_container.update(label="Done ✅", state="complete", expanded=False)
-                        final_text_placeholder.markdown(event.text)
+                        status_box.update(label="Done ✅", state="complete", expanded=False)
+                        final_placeholder.markdown(event.text)
                         assistant_ui["text"] = event.text
 
                     elif isinstance(event, AgentError):
-                        status_container.update(label="Error ❌", state="error", expanded=True)
+                        status_box.update(label="Error ❌", state="error", expanded=True)
                         st.error(event.message)
                         assistant_ui["error"] = event.message
 
-            except Exception as e:
-                status_container.update(label="Error ❌", state="error", expanded=True)
-                error_msg = f"Agent error: {e}"
-                st.error(error_msg)
-                assistant_ui["error"] = error_msg
+            except Exception as exc:
+                status_box.update(label="Error ❌", state="error", expanded=True)
+                err = f"Unexpected error: {exc}"
+                st.error(err)
+                assistant_ui["error"] = err
 
     st.session_state.ui_messages.append(assistant_ui)
