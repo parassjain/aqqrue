@@ -25,6 +25,7 @@ def transform_columns(file_path: str, operations: list[dict], output_file: str) 
       - extract:          params = {pattern: str,          # regex pattern
                                     target_column: str,    # column to write result into (new or existing)
                                     group: int}            # capture group index (default 0 = full match)
+      - drop_columns:     params = {columns: [col, ...]}  (or use top-level "column" for one)
       - drop_duplicates:  params = {subset: [col, ...]} (optional)
       - sort:             params = {column: str, ascending: bool}
     """
@@ -115,6 +116,14 @@ def transform_columns(file_path: str, operations: list[dict], output_file: str) 
             filled = df[target_col].notna().sum()
             applied.append(f"Extracted pattern from '{col}' into '{target_col}' ({filled} values)")
 
+        elif operation == "drop_columns":
+            cols_to_drop = params.get("columns") or ([col] if col else [])
+            if not cols_to_drop:
+                raise ToolError("drop_columns requires params.columns (list) or a top-level column name")
+            validate_columns_exist(df, cols_to_drop)
+            df = df.drop(columns=cols_to_drop)
+            applied.append(f"Dropped column(s): {', '.join(cols_to_drop)}")
+
         elif operation == "drop_duplicates":
             before = len(df)
             subset = params.get("subset")
@@ -135,7 +144,7 @@ def transform_columns(file_path: str, operations: list[dict], output_file: str) 
         else:
             raise ToolError(
                 f"Unknown operation '{operation}'. "
-                "Valid: rename, cast_type, fill_nulls, drop_duplicates, sort"
+                "Valid: rename, cast_type, fill_nulls, extract, drop_columns, drop_duplicates, sort"
             )
 
     saved_path = save_csv(df, output_file)
