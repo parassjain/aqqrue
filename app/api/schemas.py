@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic import BaseModel
 
 
@@ -16,15 +18,15 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
-    preview: dict | None = None
-    metadata: dict | None = None
-    error: str | None = None
-    version: int | None = None
+    preview: Optional[dict] = None
+    metadata: Optional[dict] = None
+    error: Optional[str] = None
+    version: Optional[int] = None
 
 
 class UndoResponse(BaseModel):
     success: bool
-    metadata: dict | None = None
+    metadata: Optional[dict] = None
     message: str
 
 

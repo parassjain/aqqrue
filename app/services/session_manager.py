@@ -1,4 +1,6 @@
 import uuid
+from typing import Optional, Dict, List
+
 from app.services.csv_manager import CSVManager
 
 
@@ -6,14 +8,14 @@ class SessionManager:
     """Manages active sessions. In-memory for MVP."""
 
     def __init__(self):
-        self._sessions: dict[str, CSVManager] = {}
+        self._sessions: Dict[str, CSVManager] = {}
 
     def create_session(self) -> str:
         session_id = uuid.uuid4().hex[:12]
         self._sessions[session_id] = CSVManager(session_id)
         return session_id
 
-    def get_session(self, session_id: str) -> CSVManager | None:
+    def get_session(self, session_id: str) -> Optional[CSVManager]:
         return self._sessions.get(session_id)
 
     def delete_session(self, session_id: str):
@@ -21,7 +23,7 @@ class SessionManager:
             self._sessions[session_id].cleanup()
             del self._sessions[session_id]
 
-    def list_sessions(self) -> list[str]:
+    def list_sessions(self) -> List[str]:
         return list(self._sessions.keys())
 
 

@@ -1,5 +1,4 @@
-from typing import TypedDict, Annotated
-from operator import add
+from typing import TypedDict, List, Dict, Optional
 
 
 class CSVVersion(TypedDict):
@@ -11,25 +10,25 @@ class CSVVersion(TypedDict):
 
 class ValidationResult(TypedDict):
     valid: bool
-    errors: list[str]
-    warnings: list[str]
+    errors: List[str]
+    warnings: List[str]
 
 
 class PreviewResult(TypedDict):
     rows_affected: int
-    sample_before: list[dict]
-    sample_after: list[dict]
-    columns_added: list[str]
-    columns_removed: list[str]
+    sample_before: List[dict]
+    sample_after: List[dict]
+    columns_added: List[str]
+    columns_removed: List[str]
     summary: str
 
 
 class ExecutionResult(TypedDict):
     success: bool
-    csv_output: bytes | None
-    error: str | None
-    rows: int | None
-    columns: list[str] | None
+    csv_output: Optional[bytes]
+    error: Optional[str]
+    rows: Optional[int]
+    columns: Optional[List[str]]
 
 
 class AuditEntry(TypedDict):
@@ -72,8 +71,8 @@ class AgentState(TypedDict):
     execution_result: ExecutionResult
 
     # Audit
-    audit_log: list[AuditEntry]
+    audit_log: List[AuditEntry]
 
     # Control flow
-    error: str | None
+    error: Optional[str]
     response_message: str  # Final message to send back to user

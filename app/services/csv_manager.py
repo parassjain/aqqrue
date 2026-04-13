@@ -3,6 +3,7 @@ import os
 import shutil
 import time
 from pathlib import Path
+from typing import Optional, List, Dict
 
 import pandas as pd
 
@@ -29,7 +30,7 @@ class CSVManager:
         return len(self._versions) - 1
 
     @property
-    def current_csv_path(self) -> Path | None:
+    def current_csv_path(self) -> Optional[Path]:
         if not self._versions:
             return None
         return self.session_dir / f"v{self.current_version}.csv"
@@ -65,7 +66,7 @@ class CSVManager:
         })
         return self.get_metadata()
 
-    def undo(self) -> dict | None:
+    def undo(self) -> Optional[dict]:
         """Undo last operation. Returns metadata of restored version, or None if nothing to undo."""
         if self.current_version <= 0:
             return None
@@ -76,21 +77,21 @@ class CSVManager:
         self._versions.pop()
         return self.get_metadata()
 
-    def get_current_csv_bytes(self) -> bytes | None:
+    def get_current_csv_bytes(self) -> Optional[bytes]:
         """Get the current CSV as bytes."""
         path = self.current_csv_path
         if path is None or not path.exists():
             return None
         return path.read_bytes()
 
-    def get_current_dataframe(self) -> pd.DataFrame | None:
+    def get_current_dataframe(self) -> Optional[pd.DataFrame]:
         """Get the current CSV as a DataFrame."""
         csv_bytes = self.get_current_csv_bytes()
         if csv_bytes is None:
             return None
         return pd.read_csv(io.BytesIO(csv_bytes))
 
-    def get_version_csv_bytes(self, version: int) -> bytes | None:
+    def get_version_csv_bytes(self, version: int) -> Optional[bytes]:
         """Get a specific version's CSV bytes."""
         if version < 0 or version > self.current_version:
             return None
