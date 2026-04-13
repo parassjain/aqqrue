@@ -1,0 +1,11 @@
+FROM python:3.12-slim
+
+RUN pip install --no-cache-dir pandas==2.2.3 numpy==1.26.4
+
+RUN useradd -m -s /bin/bash sandbox
+USER sandbox
+WORKDIR /home/sandbox
+
+COPY app/sandbox/runner.py /home/sandbox/runner.py
+
+ENTRYPOINT ["python", "/home/sandbox/runner.py"]
