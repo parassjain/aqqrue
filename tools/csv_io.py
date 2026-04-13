@@ -33,7 +33,7 @@ def save_csv(df: pd.DataFrame, output_path: str) -> str:
 
 def get_schema(file_path: str) -> dict:
     """
-    Return a rich schema description of the CSV for Claude to reason about.
+    Return a rich schema description of the CSV for LLM to reason about.
     Includes column names, dtypes, row count, null counts, and 3 sample rows.
     """
     df = load_csv(file_path)

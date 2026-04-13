@@ -11,7 +11,7 @@ _OUTPUT_DIR = str(Path(__file__).parent.parent / "output")
 
 
 class ToolError(Exception):
-    """Structured error returned to Claude as a tool_result with is_error=True."""
+    """Structured error returned to LLM as a tool_result with is_error=True."""
     pass
 
 
