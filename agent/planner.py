@@ -102,13 +102,6 @@ class DataFrameResult:
 
 
 @dataclass
-class ChartGenerated:
-    chart_file: str
-    chart_type: str
-    title: str
-
-
-@dataclass
 class StatsResult:
     statistics: dict[str, Any]
     message: str

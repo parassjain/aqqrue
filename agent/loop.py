@@ -27,7 +27,6 @@ from agent.planner import (
     PlanStepCompleted,
     PlanStepFailed,
     DataFrameResult,
-    ChartGenerated,
     StatsResult,
     FinalResponse,
     AgentError,
@@ -129,17 +128,6 @@ def run(
                                 columns=result.get("columns", []),
                                 message=result.get("message", ""),
                                 display_only=display_only,
-                            )
-
-                    elif tool_name == "generate_chart":
-                        if result.get("status") == "error":
-                            yield AgentError(message=result.get("message", "Chart error"))
-                        else:
-                            _mark_step_done(plan, tool_name)
-                            yield ChartGenerated(
-                                chart_file=result.get("chart_file", ""),
-                                chart_type=result.get("chart_type", ""),
-                                title=result.get("title", ""),
                             )
 
                     elif tool_name == "describe_statistics":

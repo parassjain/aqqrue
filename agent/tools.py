@@ -14,15 +14,11 @@ from langchain_core.tools import tool
 _OUTPUT_DIR = str(Path(__file__).parent.parent / "output")
 
 
-def _out(tool_name: str, input_file: str, ext: str = "csv") -> str:
+def _out(tool_name: str, input_file: str) -> str:
     """Generate a unique output path in output/ for this tool invocation."""
     base = os.path.splitext(os.path.basename(input_file))[0]
     uid = uuid.uuid4().hex[:6]
-    if ext == "json":
-        charts_dir = os.path.join(_OUTPUT_DIR, "charts")
-        os.makedirs(charts_dir, exist_ok=True)
-        return os.path.join(charts_dir, f"{uid}_{tool_name}_{base}.json")
-    return os.path.join(_OUTPUT_DIR, f"{uid}_{tool_name}_{base}.{ext}")
+    return os.path.join(_OUTPUT_DIR, f"{uid}_{tool_name}_{base}.csv")
 
 
 # ---------------------------------------------------------------------------
@@ -113,30 +109,6 @@ def describe_statistics(file_path: str, columns: Optional[list[str]] = None) -> 
 
 
 @tool
-def generate_chart(
-    file_path: str,
-    chart_type: str,
-    x_column: str,
-    y_column: str = None,
-    title: str = None,
-    color_column: str = None,
-    top_n: int = None,
-) -> dict:
-    """Generate an interactive Plotly chart from CSV data.
-    chart_type: bar, line, scatter, histogram, pie, heatmap.
-    y_column is required for bar, line, scatter, and pie charts.
-    color_column: optional column for color grouping.
-    top_n: limit to top N rows by y_column before charting."""
-    from tools.charts import generate_chart as _chart
-    return _chart(
-        file_path, chart_type, x_column,
-        _out("chart", file_path, "json"),
-        y_column=y_column, title=title,
-        color_column=color_column, top_n=top_n,
-    )
-
-
-@tool
 def undo_last_operation() -> dict:
     """Undo the last data operation and restore the CSV to its previous state.
     Call this when the user asks to undo, revert, or go back to the previous step.
@@ -171,7 +143,6 @@ ALL_TOOLS = [
     transform_columns,
     aggregate_data,
     describe_statistics,
-    generate_chart,
     save_result,
     undo_last_operation,
 ]

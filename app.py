@@ -9,7 +9,6 @@ import uuid
 from pathlib import Path
 
 import pandas as pd
-import plotly.io as pio
 import streamlit as st
 from langchain_core.messages import BaseMessage
 
@@ -19,7 +18,6 @@ from agent.planner import (
     PlanStepCompleted,
     PlanStepFailed,
     DataFrameResult,
-    ChartGenerated,
     StatsResult,
     FinalResponse,
     AgentError,
@@ -148,12 +146,6 @@ def _render_ui_message(msg: dict) -> None:
         st.dataframe(df_info["data"], use_container_width=True)
         if df_info.get("download_path"):
             _offer_download(df_info["download_path"])
-    for chart_info in msg.get("charts", []):
-        try:
-            fig = pio.from_json(open(chart_info["path"]).read())
-            st.plotly_chart(fig, use_container_width=True)
-        except Exception:
-            st.warning(f"Could not render chart: {chart_info['path']}")
     for stat in msg.get("stats", []):
         st.caption(stat["message"])
         try:
@@ -311,16 +303,6 @@ with right_col:
                                         )
                                     except Exception as exc:
                                         st.warning(f"Preview failed: {exc}")
-
-                            elif isinstance(event, ChartGenerated):
-                                try:
-                                    fig = pio.from_json(open(event.chart_file).read())
-                                    st.plotly_chart(fig, use_container_width=True)
-                                    assistant_ui["charts"].append(
-                                        {"path": event.chart_file}
-                                    )
-                                except Exception as exc:
-                                    st.warning(f"Chart render failed: {exc}")
 
                             elif isinstance(event, StatsResult):
                                 try:
