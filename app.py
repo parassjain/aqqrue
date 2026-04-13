@@ -221,7 +221,6 @@ with right_col:
                 "text": "",
                 "plan_markdown": "",
                 "dataframes": [],
-                "charts": [],
                 "stats": [],
                 "error": "",
                 "token_usage": None,
