@@ -81,6 +81,7 @@ def build_graph() -> StateGraph:
 
     # Add nodes
     graph.add_node("router", router_node)
+    graph.add_node("analysis", analysis_node)
     graph.add_node("planner", planner_node)
     graph.add_node("code_generator", code_generator_node)
     graph.add_node("validator", validator_node)
@@ -93,11 +94,13 @@ def build_graph() -> StateGraph:
     # Entry point
     graph.set_entry_point("router")
 
-    # Router: questions end immediately, operations proceed to planner
+    # Router: questions end immediately, analysis runs in sandbox, operations proceed to planner
     graph.add_conditional_edges("router", _route_after_router, {
         "answer": END,
+        "analysis": "analysis",
         "plan": "planner",
     })
+    graph.add_edge("analysis", END)
 
     # Edges
     graph.add_edge("planner", "code_generator")
