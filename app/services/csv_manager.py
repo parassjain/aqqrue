@@ -40,14 +40,16 @@ class CSVManager:
         df = pd.read_csv(io.BytesIO(file_bytes))
         path = self.session_dir / "v0.csv"
         df.to_csv(path, index=False)
-        self._versions.append({
-            "version": 0,
-            "operation": "initial_upload",
-            "filename": filename,
-            "timestamp": time.time(),
-            "rows": len(df),
-            "columns": list(df.columns),
-        })
+        self._versions.append(
+            {
+                "version": 0,
+                "operation": "initial_upload",
+                "filename": filename,
+                "timestamp": time.time(),
+                "rows": len(df),
+                "columns": list(df.columns),
+            }
+        )
         return self.get_metadata()
 
     def save_version(self, csv_bytes: bytes, operation: str) -> dict:
@@ -57,13 +59,15 @@ class CSVManager:
         path.write_bytes(csv_bytes)
 
         df = pd.read_csv(io.BytesIO(csv_bytes))
-        self._versions.append({
-            "version": new_version,
-            "operation": operation,
-            "timestamp": time.time(),
-            "rows": len(df),
-            "columns": list(df.columns),
-        })
+        self._versions.append(
+            {
+                "version": new_version,
+                "operation": operation,
+                "timestamp": time.time(),
+                "rows": len(df),
+                "columns": list(df.columns),
+            }
+        )
         return self.get_metadata()
 
     def undo(self) -> Optional[dict]:

@@ -95,11 +95,15 @@ def build_graph() -> StateGraph:
     graph.set_entry_point("router")
 
     # Router: questions end immediately, analysis runs in sandbox, operations proceed to planner
-    graph.add_conditional_edges("router", _route_after_router, {
-        "answer": END,
-        "analysis": "analysis",
-        "plan": "planner",
-    })
+    graph.add_conditional_edges(
+        "router",
+        _route_after_router,
+        {
+            "answer": END,
+            "analysis": "analysis",
+            "plan": "planner",
+        },
+    )
     graph.add_edge("analysis", END)
 
     # Edges
@@ -107,25 +111,37 @@ def build_graph() -> StateGraph:
     graph.add_edge("code_generator", "validator")
 
     # After validation: proceed, retry, or fail
-    graph.add_conditional_edges("validator", _route_after_validation, {
-        "preview": "preview",
-        "retry_code_gen": "increment_retry",
-        "fail": "fail",
-    })
+    graph.add_conditional_edges(
+        "validator",
+        _route_after_validation,
+        {
+            "preview": "preview",
+            "retry_code_gen": "increment_retry",
+            "fail": "fail",
+        },
+    )
 
     # After preview: execute, retry, or fail
-    graph.add_conditional_edges("preview", _route_after_preview, {
-        "execute": "executor",
-        "retry_code_gen": "increment_retry",
-        "fail": "fail",
-    })
+    graph.add_conditional_edges(
+        "preview",
+        _route_after_preview,
+        {
+            "execute": "executor",
+            "retry_code_gen": "increment_retry",
+            "fail": "fail",
+        },
+    )
 
     # After execution: audit, retry, or fail
-    graph.add_conditional_edges("executor", _route_after_execution, {
-        "audit": "auditor",
-        "retry_code_gen": "increment_retry",
-        "fail": "fail",
-    })
+    graph.add_conditional_edges(
+        "executor",
+        _route_after_execution,
+        {
+            "audit": "auditor",
+            "retry_code_gen": "increment_retry",
+            "fail": "fail",
+        },
+    )
 
     # Retry loops back to code_generator
     graph.add_edge("increment_retry", "code_generator")

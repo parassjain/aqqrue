@@ -8,11 +8,23 @@ def executor_node(state: AgentState) -> dict:
 
     csv_mgr = session_manager.get_session(state["session_id"])
     if csv_mgr is None:
-        return {"execution_result": {"success": False, "csv_output": None, "error": "Session not found"}}
+        return {
+            "execution_result": {
+                "success": False,
+                "csv_output": None,
+                "error": "Session not found",
+            }
+        }
 
     csv_bytes = csv_mgr.get_current_csv_bytes()
     if csv_bytes is None:
-        return {"execution_result": {"success": False, "csv_output": None, "error": "No CSV loaded"}}
+        return {
+            "execution_result": {
+                "success": False,
+                "csv_output": None,
+                "error": "No CSV loaded",
+            }
+        }
 
     result = run_in_sandbox(state["generated_code"], csv_bytes)
 

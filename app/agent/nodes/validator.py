@@ -8,15 +8,47 @@ from app.agent.prompts.validator import VALIDATOR_SYSTEM_PROMPT, VALIDATOR_USER_
 
 # Imports that are blocked in generated code
 BLOCKED_MODULES = {
-    "os", "sys", "subprocess", "shutil", "pathlib", "socket",
-    "http", "urllib", "requests", "ftplib", "smtplib",
-    "ctypes", "importlib", "code", "codeop", "compile",
-    "eval", "exec", "pickle", "shelve", "marshal",
-    "tempfile", "glob", "fnmatch", "signal", "threading",
-    "multiprocessing", "asyncio", "webbrowser",
+    "os",
+    "sys",
+    "subprocess",
+    "shutil",
+    "pathlib",
+    "socket",
+    "http",
+    "urllib",
+    "requests",
+    "ftplib",
+    "smtplib",
+    "ctypes",
+    "importlib",
+    "code",
+    "codeop",
+    "compile",
+    "eval",
+    "exec",
+    "pickle",
+    "shelve",
+    "marshal",
+    "tempfile",
+    "glob",
+    "fnmatch",
+    "signal",
+    "threading",
+    "multiprocessing",
+    "asyncio",
+    "webbrowser",
 }
 
-BLOCKED_BUILTINS = {"open", "exec", "eval", "compile", "__import__", "globals", "locals", "breakpoint"}
+BLOCKED_BUILTINS = {
+    "open",
+    "exec",
+    "eval",
+    "compile",
+    "__import__",
+    "globals",
+    "locals",
+    "breakpoint",
+}
 
 
 def _static_validate(code: str) -> tuple[bool, list[str], list[str]]:
@@ -32,8 +64,7 @@ def _static_validate(code: str) -> tuple[bool, list[str], list[str]]:
 
     # Check for transform function
     func_names = [
-        node.name for node in ast.walk(tree)
-        if isinstance(node, ast.FunctionDef)
+        node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
     ]
     if "transform" not in func_names:
         errors.append("No 'transform' function defined")
@@ -117,7 +148,11 @@ def validator_node(state: AgentState) -> dict:
         result = json.loads(raw)
     except json.JSONDecodeError:
         # If LLM doesn't return valid JSON, assume valid (static check passed)
-        result = {"valid": True, "errors": [], "warnings": [f"LLM validator returned non-JSON: {raw[:100]}"]}
+        result = {
+            "valid": True,
+            "errors": [],
+            "warnings": [f"LLM validator returned non-JSON: {raw[:100]}"],
+        }
 
     # Merge static warnings
     result["warnings"] = static_warnings + result.get("warnings", [])
@@ -128,5 +163,7 @@ def validator_node(state: AgentState) -> dict:
             "errors": result.get("errors", []),
             "warnings": result.get("warnings", []),
         },
-        "last_error": "; ".join(result.get("errors", [])) if not result.get("valid", True) else "",
+        "last_error": (
+            "; ".join(result.get("errors", [])) if not result.get("valid", True) else ""
+        ),
     }

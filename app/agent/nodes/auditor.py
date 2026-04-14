@@ -40,7 +40,9 @@ def auditor_node(state: AgentState) -> dict:
     preview = state.get("preview", {})
     response_parts = [f"Done. {preview.get('summary', 'Operation completed.')}"]
     if exec_result.get("rows") is not None:
-        response_parts.append(f"Output: {exec_result['rows']} rows, {len(exec_result.get('columns', []))} columns.")
+        response_parts.append(
+            f"Output: {exec_result['rows']} rows, {len(exec_result.get('columns', []))} columns."
+        )
     response_parts.append(f"Version: v{new_metadata['version']}")
 
     return {

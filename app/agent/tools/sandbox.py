@@ -10,7 +10,6 @@ import docker
 
 from app.config import settings
 
-
 SANDBOX_IMAGE = "aqqrue-sandbox"
 _RUNNER_PATH = Path(__file__).resolve().parents[3] / "app" / "sandbox" / "runner.py"
 
@@ -60,19 +59,48 @@ def _run_locally(code: str, csv_bytes: bytes) -> dict:
             try:
                 result = json.loads(output)
             except json.JSONDecodeError:
-                return {"success": False, "csv_output": None, "error": f"Runner output: {output}"}
+                return {
+                    "success": False,
+                    "csv_output": None,
+                    "error": f"Runner output: {output}",
+                }
 
             if result.get("success"):
                 if "result_value" in result:
-                    return {"success": True, "csv_output": None, "error": None, "result_value": result["result_value"], "rows": None, "columns": None}
-                return {"success": True, "csv_output": output_csv.read_bytes(), "error": None, "rows": result.get("rows"), "columns": result.get("columns")}
+                    return {
+                        "success": True,
+                        "csv_output": None,
+                        "error": None,
+                        "result_value": result["result_value"],
+                        "rows": None,
+                        "columns": None,
+                    }
+                return {
+                    "success": True,
+                    "csv_output": output_csv.read_bytes(),
+                    "error": None,
+                    "rows": result.get("rows"),
+                    "columns": result.get("columns"),
+                }
             else:
-                return {"success": False, "csv_output": None, "error": result.get("error", "Unknown error")}
+                return {
+                    "success": False,
+                    "csv_output": None,
+                    "error": result.get("error", "Unknown error"),
+                }
 
         except subprocess.TimeoutExpired:
-            return {"success": False, "csv_output": None, "error": f"Execution timed out after {settings.SANDBOX_TIMEOUT}s"}
+            return {
+                "success": False,
+                "csv_output": None,
+                "error": f"Execution timed out after {settings.SANDBOX_TIMEOUT}s",
+            }
         except Exception as e:
-            return {"success": False, "csv_output": None, "error": f"{type(e).__name__}: {e}"}
+            return {
+                "success": False,
+                "csv_output": None,
+                "error": f"{type(e).__name__}: {e}",
+            }
 
 
 def run_in_sandbox(code: str, csv_bytes: bytes) -> dict:
@@ -130,7 +158,11 @@ def run_in_sandbox(code: str, csv_bytes: bytes) -> dict:
             try:
                 result = json.loads(output)
             except json.JSONDecodeError:
-                return {"success": False, "csv_output": None, "error": f"Invalid sandbox output: {output}"}
+                return {
+                    "success": False,
+                    "csv_output": None,
+                    "error": f"Invalid sandbox output: {output}",
+                }
 
             if result.get("success"):
                 # Analysis result (scalar/string) — no CSV written
@@ -163,12 +195,20 @@ def run_in_sandbox(code: str, csv_bytes: bytes) -> dict:
             # Try to parse JSON from stderr or stdout
             try:
                 result = json.loads(stderr.strip())
-                return {"success": False, "csv_output": None, "error": result.get("error", stderr)}
+                return {
+                    "success": False,
+                    "csv_output": None,
+                    "error": result.get("error", stderr),
+                }
             except json.JSONDecodeError:
                 return {"success": False, "csv_output": None, "error": stderr}
 
         except Exception as e:
-            return {"success": False, "csv_output": None, "error": f"{type(e).__name__}: {e}"}
+            return {
+                "success": False,
+                "csv_output": None,
+                "error": f"{type(e).__name__}: {e}",
+            }
 
         finally:
             client.close()
