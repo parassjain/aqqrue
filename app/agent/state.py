@@ -74,5 +74,6 @@ class AgentState(TypedDict):
     audit_log: List[AuditEntry]
 
     # Control flow
+    intent: str  # "question" or "operation"
     error: Optional[str]
     response_message: str  # Final message to send back to user
