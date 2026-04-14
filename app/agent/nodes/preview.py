@@ -42,8 +42,8 @@ def preview_node(state: AgentState) -> dict:
 
     preview = {
         "rows_affected": len(after_df),
-        "sample_before": df.head(5).to_dict(orient="records"),
-        "sample_after": after_df.head(5).to_dict(orient="records"),
+        "sample_before": df.to_dict(orient="records"),
+        "sample_after": after_df.to_dict(orient="records"),
         "columns_added": list(after_cols - before_cols),
         "columns_removed": list(before_cols - after_cols),
         "summary": _build_summary(df, after_df),

@@ -122,7 +122,7 @@ for msg in st.session_state.messages:
         if msg.get("preview"):
             preview = msg["preview"]
             if preview.get("sample_after"):
-                st.caption("Preview (first 5 rows after change):")
+                st.caption("Preview (after change):")
                 st.dataframe(
                     pd.DataFrame(preview["sample_after"]), use_container_width=True
                 )
@@ -144,7 +144,7 @@ if prompt := st.chat_input("Describe the change you want to make..."):
 
                 preview = result.get("preview")
                 if preview and preview.get("sample_after"):
-                    st.caption("Preview (first 5 rows after change):")
+                    st.caption("Preview (after change):")
                     st.dataframe(
                         pd.DataFrame(preview["sample_after"]), use_container_width=True
                     )
