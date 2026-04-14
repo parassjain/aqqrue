@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 
 def executor_node(state: AgentState) -> dict:
     """Execute the generated code on the full CSV in the Docker sandbox."""
+    logger.info("[NODE: executor] Running generated code in sandbox")
     from app.services.session_manager import session_manager
 
     csv_mgr = session_manager.get_session(state["session_id"])
