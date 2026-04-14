@@ -7,13 +7,14 @@ from app.agent.state import AgentState
 _SYSTEM = """You are a classifier for a CSV processing assistant.
 
 Given a user message and CSV metadata, decide if the user wants:
-- "question": they are asking about the data (describe, explain, summarize, what is, how many, show me, etc.) — no changes to the CSV
+- "question": they are asking about the data structure/content (describe, explain, what columns, what is this file, show me, etc.) — answerable from metadata alone, no changes to the CSV
+- "analysis": they want a computed result from the full data (sum, total, count, average, min, max, group by, distribution, etc.) — needs code to run on full CSV, no changes to the CSV
 - "operation": they want to modify, filter, add, remove, transform, or export the CSV
 
 Also, if the intent is "question", provide a direct, helpful answer using the metadata provided.
 
 Respond with JSON only:
-{"intent": "question" | "operation", "answer": "<answer if question, else empty string>"}"""
+{"intent": "question" | "analysis" | "operation", "answer": "<answer if question, else empty string>"}"""
 
 _USER_TEMPLATE = """CSV Metadata:
 - Columns: {columns}
@@ -66,5 +67,8 @@ def router_node(state: AgentState) -> dict:
 
     if intent == "question":
         return {"intent": "question", "response_message": answer}
+
+    if intent == "analysis":
+        return {"intent": "analysis"}
 
     return {"intent": "operation"}

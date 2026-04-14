@@ -83,6 +83,16 @@ def run_in_sandbox(code: str, csv_bytes: bytes) -> dict:
                 return {"success": False, "csv_output": None, "error": f"Invalid sandbox output: {output}"}
 
             if result.get("success"):
+                # Analysis result (scalar/string) — no CSV written
+                if "result_value" in result:
+                    return {
+                        "success": True,
+                        "csv_output": None,
+                        "error": None,
+                        "result_value": result["result_value"],
+                        "rows": None,
+                        "columns": None,
+                    }
                 csv_output = output_csv.read_bytes()
                 return {
                     "success": True,

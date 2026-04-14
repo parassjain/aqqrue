@@ -35,17 +35,24 @@ def main():
         # Execute transform
         result = local_ns["transform"](df)
 
-        if not isinstance(result, pd.DataFrame):
-            print(json.dumps({"success": False, "error": f"transform() returned {type(result).__name__}, expected DataFrame"}))
-            sys.exit(1)
-
-        # Write output
-        result.to_csv("/home/sandbox/output.csv", index=False)
-        print(json.dumps({
-            "success": True,
-            "rows": len(result),
-            "columns": list(result.columns),
-        }))
+        if isinstance(result, pd.DataFrame):
+            # Standard operation: write CSV output
+            result.to_csv("/home/sandbox/output.csv", index=False)
+            print(json.dumps({
+                "success": True,
+                "rows": len(result),
+                "columns": list(result.columns),
+            }))
+        else:
+            # Analysis result: return value as string, no CSV written
+            if hasattr(result, "to_string"):
+                result_str = result.to_string()
+            else:
+                result_str = str(result)
+            print(json.dumps({
+                "success": True,
+                "result_value": result_str,
+            }))
 
     except Exception as e:
         print(json.dumps({
