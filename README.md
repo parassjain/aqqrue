@@ -23,12 +23,14 @@ Built with **LangGraph** for agentic orchestration, **LiteLLM** for model-agnost
   - [Supported Operations](#supported-operations)
 - [API Reference](#api-reference)
 - [How It Works — Deep Dive](#how-it-works--deep-dive)
-  - [1. Planner](#1-planner)
-  - [2. Code Generator](#2-code-generator)
-  - [3. Validator](#3-validator)
-  - [4. Preview](#4-preview)
-  - [5. Executor](#5-executor)
-  - [6. Auditor](#6-auditor)
+  - [1. Router](#1-router)
+  - [2. Planner](#2-planner)
+  - [3. Code Generator](#3-code-generator)
+  - [4. Validator](#4-validator)
+  - [5. Preview](#5-preview)
+  - [6. Executor](#6-executor)
+  - [7. Auditor](#7-auditor)
+  - [8. Analysis](#8-analysis)
 - [Security Model](#security-model)
 - [Version Control & Undo](#version-control--undo)
 - [Supported LLM Providers](#supported-llm-providers)
@@ -41,6 +43,8 @@ Built with **LangGraph** for agentic orchestration, **LiteLLM** for model-agnost
 ## Features
 
 - **Natural language CSV editing** — Describe changes in plain English; the agent writes and executes pandas code.
+- **Intent-aware routing** — Automatically detects whether you're asking a question, requesting analysis, or making a modification — no manual mode switching.
+- **Read-only analysis** — Ask questions like "What is the total GST?" and get computed answers without touching the CSV.
 - **Dynamic tool generation** — The agent generates Python functions on-the-fly for each operation. No pre-built tools needed.
 - **Accounting-domain awareness** — Understands ledger terms (narration, voucher, folio, debit/credit, GST, TDS, aging, trial balance, journal entries).
 - **Secure Docker sandbox** — Generated code runs in an isolated container with no network access and memory limits.
@@ -57,26 +61,30 @@ Built with **LangGraph** for agentic orchestration, **LiteLLM** for model-agnost
 ## Architecture
 
 ```
-┌──────────────┐     ┌──────────────┐     ┌──────────────────────────┐
-│  Streamlit   │────▶│   FastAPI    │────▶│     LangGraph Agent      │
-│  Chat UI     │◀────│   Backend    │◀────│                          │
-└──────────────┘     └──────────────┘     │  Planner                 │
-                                          │  ↓                       │
-                                          │  Code Generator          │
-                                          │  ↓                       │
-                                          │  Validator (AST + LLM)   │
-                                          │  ↓                       │
-                                          │  Preview ──▶ Executor    │
-                                          │              ↓           │
-                                          │           Docker Sandbox │
-                                          │              ↓           │
-                                          │           Auditor        │
-                                          └──────────────────────────┘
-                                                       ↓
-                                          ┌──────────────────────────┐
-                                          │  Filesystem (CSV versions│
-                                          │  + audit log)            │
-                                          └──────────────────────────┘
+┌──────────────┐     ┌──────────────┐     ┌──────────────────────────────┐
+│  Streamlit   │────▶│   FastAPI    │────▶│       LangGraph Agent        │
+│  Chat UI     │◀────│   Backend    │◀────│                              │
+└──────────────┘     └──────────────┘     │  Router (intent classifier)  │
+                                          │  ↓                           │
+                                          │  ├─ question → answer direct │
+                                          │  ├─ analysis → Analysis Node │
+                                          │  └─ operation → Planner      │
+                                          │                 ↓            │
+                                          │           Code Generator     │
+                                          │                 ↓            │
+                                          │        Validator (AST + LLM) │
+                                          │                 ↓            │
+                                          │        Preview ──▶ Executor  │
+                                          │                     ↓        │
+                                          │               Docker Sandbox │
+                                          │                     ↓        │
+                                          │                  Auditor     │
+                                          └──────────────────────────────┘
+                                                           ↓
+                                          ┌──────────────────────────────┐
+                                          │  Filesystem (CSV versions    │
+                                          │  + audit log)                │
+                                          └──────────────────────────────┘
 ```
 
 ---
@@ -84,30 +92,46 @@ Built with **LangGraph** for agentic orchestration, **LiteLLM** for model-agnost
 ## Agent Flow
 
 ```
-START → Planner → Code Generator → Validator
-                        ↑                 │
-                        │            ┌────┴────┐
-                        │          valid?    invalid?
-                        │            │         │
-                        │            ▼         │ (retry, max 3)
-                        │         Preview ─────┘
-                        │            │
-                        │            ▼
-                        │         Executor
-                        │            │
-                        │       ┌────┴────┐
-                        │     success?   error?
-                        │       │         │ (retry, max 3)
-                        │       ▼         │
-                        │     Auditor ────┘
-                        │       │
-                        └───────┘
+                   ┌─────────────────────────────────────┐
+START → Router ────┤                                     │
+                   │  intent = "question"                │
+                   │    → answer directly → END          │
+                   │                                     │
+                   │  intent = "analysis"                │
+                   │    → Analysis Node → END            │
+                   │      (runs code in sandbox,         │
+                   │       returns computed result)      │
+                   │                                     │
+                   │  intent = "operation"               │
+                   │    → Planner                        │
+                   └─────────────────────────────────────┘
                               │
                               ▼
-                             END → Response to user
+                  Planner → Code Generator → Validator
+                                  ↑                 │
+                                  │            ┌────┴────┐
+                                  │          valid?    invalid?
+                                  │            │         │
+                                  │            ▼         │ (retry, max 3)
+                                  │         Preview ─────┘
+                                  │            │
+                                  │            ▼
+                                  │         Executor
+                                  │            │
+                                  │       ┌────┴────┐
+                                  │     success?   error?
+                                  │       │         │ (retry, max 3)
+                                  │       ▼         │
+                                  │     Auditor ────┘
+                                  │       │
+                                  └───────┘
+                                        │
+                                        ▼
+                                       END → Response to user
 ```
 
-- **Max 3 retries** across validation failures and execution errors.
+- The **Router** first classifies every message — questions are answered immediately from metadata; analysis requests run read-only code in the sandbox; modification requests go through the full planning pipeline.
+- **Max 3 retries** across validation failures and execution errors (operation path only).
 - On retry, the Code Generator receives the previous error message as context.
 - After 3 failures, the agent returns a clear error message to the user.
 
@@ -142,6 +166,8 @@ aqqrue/
 │   │   │
 │   │   ├── nodes/
 │   │   │   ├── __init__.py
+│   │   │   ├── router.py         # Classifies intent: question / analysis / operation
+│   │   │   ├── analysis.py       # Read-only sandbox analysis (sums, counts, distributions)
 │   │   │   ├── planner.py        # Understands user intent with accounting domain knowledge
 │   │   │   ├── code_generator.py # Generates pandas transform() functions
 │   │   │   ├── validator.py      # AST static analysis + LLM semantic validation
@@ -212,8 +238,12 @@ Edit `.env`:
 
 ```env
 # LLM provider — change MODEL_NAME to switch providers
-MODEL_NAME=gpt-4o
-API_KEY=sk-your-openai-api-key-here
+MODEL_NAME=gemini/gemma-4-31b-it
+API_KEY=your-api-key-here
+
+# For OpenAI:
+# MODEL_NAME=gpt-4o
+# API_KEY=sk-your-openai-api-key-here
 
 # For Anthropic:
 # MODEL_NAME=claude-sonnet-4-20250514
@@ -378,7 +408,27 @@ curl http://localhost:8000/api/session/a1b2c3d4e5f6/download -o output.csv
 
 ## How It Works — Deep Dive
 
-### 1. Planner
+### 1. Router
+
+**File:** `app/agent/nodes/router.py`
+
+The Router is the entry point for every user message. It classifies intent into one of three categories using the LLM and CSV metadata (never the full CSV):
+
+- **`question`** — The user is asking about the data structure or content (e.g., "What columns do I have?", "How many rows?"). Answered directly from metadata — no code, no sandbox, instant response.
+- **`analysis`** — The user wants a computed result (e.g., "What is the total Amount?", "Show me the distribution of transactions by month"). Handled by the Analysis node — runs code in the sandbox but does **not** modify the CSV.
+- **`operation`** — The user wants to modify, filter, add columns, transform, or export the CSV. Routed to the full planning pipeline.
+
+This avoids running the heavyweight plan→generate→validate→execute pipeline for simple queries.
+
+### 2. Analysis
+
+**File:** `app/agent/nodes/analysis.py`
+
+Handles read-only analysis requests. The LLM generates a `transform(df)` function that returns a scalar, string, or dict (not a DataFrame), which is then run in the Docker sandbox on the full CSV. The result is returned directly to the user without saving a new version or updating the audit log.
+
+Examples: total sums, averages, row counts by category, max/min values, distributions.
+
+### 3. Planner
 
 **File:** `app/agent/nodes/planner.py`
 
@@ -388,7 +438,7 @@ It produces a structured plan: what operation to perform, which columns are invo
 
 The Planner's system prompt includes extensive accounting domain knowledge — it understands terms like narration, voucher, folio, debit/credit, GST, TDS, trial balance, aging buckets, and journal entries.
 
-### 2. Code Generator
+### 4. Code Generator
 
 **File:** `app/agent/nodes/code_generator.py`
 
@@ -410,7 +460,7 @@ Strict constraints enforced via the prompt:
 
 On **retry**, the Code Generator receives the previous error message and its failed code as context.
 
-### 3. Validator
+### 5. Validator
 
 **File:** `app/agent/nodes/validator.py`
 
@@ -429,7 +479,7 @@ Two-layer validation:
 - Checks for edge case handling (nulls, type mismatches)
 - Validates accounting rules (e.g., debit = credit balance)
 
-### 4. Preview
+### 6. Preview
 
 **File:** `app/agent/nodes/preview.py`
 
@@ -441,7 +491,7 @@ Runs the validated code on the **first 10 rows** of the CSV inside the Docker sa
 
 This lets the user see what will happen before the full CSV is modified.
 
-### 5. Executor
+### 7. Executor
 
 **File:** `app/agent/nodes/executor.py`
 
@@ -452,7 +502,7 @@ Runs the code on the **full CSV** inside the Docker sandbox. The sandbox:
 - Runs as a non-root user
 - Communicates via mounted files (input CSV + code in, output CSV out)
 
-### 6. Auditor
+### 8. Auditor
 
 **File:** `app/agent/nodes/auditor.py`
 
