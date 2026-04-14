@@ -1,12 +1,15 @@
 """Docker sandbox client — sends code + CSV to an isolated container for execution."""
 
 import json
+import logging
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 import docker
+
+logger = logging.getLogger(__name__)
 
 from app.config import settings
 
@@ -32,6 +35,7 @@ def ensure_sandbox_image():
 
 def _run_locally(code: str, csv_bytes: bytes) -> dict:
     """Fallback: run the transform in a local subprocess (no Docker isolation)."""
+    logger.info("Executing code locally via subprocess (no Docker isolation)")
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
         input_csv = tmpdir_path / "input.csv"
@@ -121,7 +125,10 @@ def run_in_sandbox(code: str, csv_bytes: bytes) -> dict:
     try:
         client = docker.from_env()
     except docker.errors.DockerException:
+        logger.warning("Docker not available — running code locally (no isolation)")
         return _run_locally(code, csv_bytes)
+
+    logger.info("Running code in Docker sandbox (image: %s)", SANDBOX_IMAGE)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
