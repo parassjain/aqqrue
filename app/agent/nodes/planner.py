@@ -1,13 +1,17 @@
 import json
+import logging
 import litellm
 
 from app.config import get_litellm_kwargs
 from app.agent.state import AgentState
+
+logger = logging.getLogger(__name__)
 from app.agent.prompts.planner import PLANNER_SYSTEM_PROMPT, PLANNER_USER_TEMPLATE
 
 
 def planner_node(state: AgentState) -> dict:
     """Analyze user instruction + CSV metadata → produce a plan."""
+    logger.info("[NODE: planner] Generating plan for message: %r", state["user_message"])
     metadata = state["csv_metadata"]
 
     user_prompt = PLANNER_USER_TEMPLATE.format(
@@ -29,4 +33,5 @@ def planner_node(state: AgentState) -> dict:
     )
 
     plan = response.choices[0].message.content.strip()
+    logger.info("[NODE: planner] Plan generated (%d chars)", len(plan))
     return {"plan": plan}

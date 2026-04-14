@@ -1,7 +1,22 @@
 import logging
 import traceback
+from datetime import datetime, timezone, timedelta
 
-logging.basicConfig(level=logging.INFO)
+# IST = UTC+5:30
+_IST = timezone(timedelta(hours=5, minutes=30))
+
+
+class _ISTFormatter(logging.Formatter):
+    def formatTime(self, record, datefmt=None):  # noqa: N802
+        dt = datetime.fromtimestamp(record.created, tz=_IST)
+        return dt.strftime("%Y-%m-%d %H:%M:%S IST")
+
+
+_handler = logging.StreamHandler()
+_handler.setFormatter(
+    _ISTFormatter(fmt="%(asctime)s [%(levelname)s] %(name)s — %(message)s")
+)
+logging.basicConfig(level=logging.INFO, handlers=[_handler], force=True)
 
 import docker
 import docker.errors

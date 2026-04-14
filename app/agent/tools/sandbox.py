@@ -60,16 +60,22 @@ def run_in_sandbox(code: str, csv_bytes: bytes) -> dict:
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
 
-        # Write input files
+        # Write input files — world-readable so the sandbox user can access them
         input_csv = tmpdir_path / "input.csv"
         input_csv.write_bytes(csv_bytes)
+        input_csv.chmod(0o644)
 
         code_file = tmpdir_path / "code.py"
         code_file.write_text(code)
+        code_file.chmod(0o644)
 
-        # Create output placeholder
+        # Create output placeholder — world-writable so the sandbox user can write it
         output_csv = tmpdir_path / "output.csv"
         output_csv.touch()
+        output_csv.chmod(0o666)
+
+        # Temp dir itself must be readable by the sandbox user
+        tmpdir_path.chmod(0o755)
 
         try:
             container = client.containers.run(

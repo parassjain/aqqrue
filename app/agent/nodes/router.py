@@ -1,8 +1,11 @@
 import json
+import logging
 import litellm
 
 from app.config import get_litellm_kwargs
 from app.agent.state import AgentState
+
+logger = logging.getLogger(__name__)
 
 _SYSTEM = """You are a classifier for a CSV processing assistant.
 
@@ -29,6 +32,7 @@ User message: {user_message}"""
 
 def router_node(state: AgentState) -> dict:
     """Classify intent: answer questions directly, route operations to planner."""
+    logger.info("[NODE: router] Classifying intent for message: %r", state["user_message"])
     metadata = state["csv_metadata"]
 
     user_prompt = _USER_TEMPLATE.format(
@@ -64,6 +68,8 @@ def router_node(state: AgentState) -> dict:
 
     intent = result.get("intent", "operation")
     answer = result.get("answer", "")
+
+    logger.info("[NODE: router] Intent classified as: %r", intent)
 
     if intent == "question":
         return {"intent": "question", "response_message": answer}
