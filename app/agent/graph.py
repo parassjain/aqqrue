@@ -3,6 +3,7 @@
 from langgraph.graph import StateGraph, END
 
 from app.agent.state import AgentState
+from app.agent.nodes.router import router_node
 from app.agent.nodes.planner import planner_node
 from app.agent.nodes.code_generator import code_generator_node
 from app.agent.nodes.validator import validator_node
