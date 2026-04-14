@@ -90,7 +90,10 @@ def run_in_sandbox(code: str, csv_bytes: bytes) -> dict:
             rows: int | None
             columns: list[str] | None
     """
-    client = docker.from_env()
+    try:
+        client = docker.from_env()
+    except docker.errors.DockerException:
+        return _run_locally(code, csv_bytes)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
