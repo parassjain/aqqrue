@@ -54,6 +54,7 @@ def preview_node(state: AgentState) -> dict:
         "summary": _build_summary(df, after_df),
     }
 
+    logger.info("[NODE: preview] Preview complete: %s", preview["summary"])
     return {"preview": preview, "last_error": ""}
 
 
