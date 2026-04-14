@@ -8,12 +8,14 @@ logger = logging.getLogger(__name__)
 
 def auditor_node(state: AgentState) -> dict:
     """Log the completed operation and save the new CSV version."""
+    logger.info("[NODE: auditor] Auditing execution result")
     from app.services.session_manager import session_manager
 
     csv_mgr = session_manager.get_session(state["session_id"])
     exec_result = state["execution_result"]
 
     if not exec_result["success"] or exec_result.get("csv_output") is None:
+        logger.warning("[NODE: auditor] Execution failed, skipping save: %s", exec_result.get("error"))
         return {
             "error": exec_result.get("error", "Execution failed"),
             "response_message": f"Operation failed: {exec_result.get('error', 'Unknown error')}",
