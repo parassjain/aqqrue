@@ -64,11 +64,17 @@ def _increment_retry(state: AgentState) -> dict:
     return {"retry_count": state.get("retry_count", 0) + 1}
 
 
+def _route_after_router(state: AgentState) -> str:
+    """Route after router: answer questions directly or proceed to planning."""
+    return "answer" if state.get("intent") == "question" else "plan"
+
+
 def build_graph() -> StateGraph:
     """Build and compile the agent graph."""
     graph = StateGraph(AgentState)
 
     # Add nodes
+    graph.add_node("router", router_node)
     graph.add_node("planner", planner_node)
     graph.add_node("code_generator", code_generator_node)
     graph.add_node("validator", validator_node)
@@ -79,7 +85,13 @@ def build_graph() -> StateGraph:
     graph.add_node("increment_retry", _increment_retry)
 
     # Entry point
-    graph.set_entry_point("planner")
+    graph.set_entry_point("router")
+
+    # Router: questions end immediately, operations proceed to planner
+    graph.add_conditional_edges("router", _route_after_router, {
+        "answer": END,
+        "plan": "planner",
+    })
 
     # Edges
     graph.add_edge("planner", "code_generator")
