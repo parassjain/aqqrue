@@ -1,10 +1,13 @@
 import ast
 import json
+import logging
 import litellm
 
 from app.config import get_litellm_kwargs
 from app.agent.state import AgentState
 from app.agent.prompts.validator import VALIDATOR_SYSTEM_PROMPT, VALIDATOR_USER_TEMPLATE
+
+logger = logging.getLogger(__name__)
 
 # Imports that are blocked in generated code
 BLOCKED_MODULES = {
