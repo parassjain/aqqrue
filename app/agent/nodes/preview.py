@@ -27,6 +27,7 @@ def preview_node(state: AgentState) -> dict:
     result = run_in_sandbox(state["generated_code"], sample_bytes)
 
     if not result["success"]:
+        logger.warning("[NODE: preview] Preview failed: %s", result["error"])
         return {
             "preview": {
                 "rows_affected": 0,
