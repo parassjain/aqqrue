@@ -56,6 +56,7 @@ def chat(session_id: str, request: ChatRequest):
         "session_id": session_id,
         "csv_metadata": metadata,
         "user_message": request.message,
+        "intent": "",
         "plan": "",
         "generated_code": "",
         "retry_count": 0,
