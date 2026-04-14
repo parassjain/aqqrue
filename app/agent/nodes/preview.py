@@ -1,8 +1,11 @@
 import io
+import logging
 import pandas as pd
 
 from app.agent.state import AgentState
 from app.agent.tools.sandbox import run_in_sandbox
+
+logger = logging.getLogger(__name__)
 
 
 def preview_node(state: AgentState) -> dict:
