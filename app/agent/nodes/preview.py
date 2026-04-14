@@ -17,11 +17,9 @@ def preview_node(state: AgentState) -> dict:
     if df is None:
         return {"error": "No CSV loaded", "preview": {}}
 
-    # Take a sample for preview (first 10 rows)
-    sample_df = df.head(10)
-    sample_bytes = sample_df.to_csv(index=False).encode()
+    sample_bytes = df.to_csv(index=False).encode()
 
-    # Run in sandbox on sample
+    # Run in sandbox on full CSV
     result = run_in_sandbox(state["generated_code"], sample_bytes)
 
     if not result["success"]:
@@ -39,16 +37,16 @@ def preview_node(state: AgentState) -> dict:
 
     # Parse output
     after_df = pd.read_csv(io.BytesIO(result["csv_output"]))
-    before_cols = set(sample_df.columns)
+    before_cols = set(df.columns)
     after_cols = set(after_df.columns)
 
     preview = {
         "rows_affected": len(after_df),
-        "sample_before": sample_df.head(5).to_dict(orient="records"),
+        "sample_before": df.head(5).to_dict(orient="records"),
         "sample_after": after_df.head(5).to_dict(orient="records"),
         "columns_added": list(after_cols - before_cols),
         "columns_removed": list(before_cols - after_cols),
-        "summary": _build_summary(sample_df, after_df),
+        "summary": _build_summary(df, after_df),
     }
 
     return {"preview": preview, "last_error": ""}

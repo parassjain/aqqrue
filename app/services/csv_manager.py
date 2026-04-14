@@ -101,7 +101,7 @@ class CSVManager:
         return path.read_bytes()
 
     def get_metadata(self) -> dict:
-        """Get metadata about the current CSV (for LLM context — NOT the full data)."""
+        """Get metadata about the current CSV (for LLM context)."""
         df = self.get_current_dataframe()
         if df is None:
             return {"loaded": False}
@@ -112,7 +112,7 @@ class CSVManager:
             "rows": len(df),
             "columns": list(df.columns),
             "dtypes": {col: str(dtype) for col, dtype in df.dtypes.items()},
-            "sample_rows": df.head(5).to_dict(orient="records"),
+            "sample_rows": df.to_dict(orient="records"),
             "null_counts": df.isnull().sum().to_dict(),
         }
 
