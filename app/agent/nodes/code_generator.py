@@ -54,6 +54,7 @@ def code_generator_node(state: AgentState) -> dict:
         lines = [l for l in lines if not l.strip().startswith("```")]
         code = "\n".join(lines)
 
+    logger.info("[NODE: code_generator] Code generated (%d chars)", len(code))
     return {
         "generated_code": code,
     }
