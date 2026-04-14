@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 def preview_node(state: AgentState) -> dict:
     """Run the generated code on a sample of the CSV to produce a before/after preview."""
+    logger.info("[NODE: preview] Running preview in sandbox")
     from app.services.session_manager import session_manager
 
     csv_mgr = session_manager.get_session(state["session_id"])
