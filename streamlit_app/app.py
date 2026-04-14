@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import io
 
-from streamlit_app.api_client import APIClient
+from api_client import APIClient
 
 st.set_page_config(page_title="Aqqrue — CSV Agent", layout="wide")
 
@@ -32,7 +32,9 @@ with st.sidebar:
             try:
                 session_id = api.create_session()
                 st.session_state.session_id = session_id
-                result = api.upload_csv(session_id, uploaded_file.getvalue(), uploaded_file.name)
+                result = api.upload_csv(
+                    session_id, uploaded_file.getvalue(), uploaded_file.name
+                )
                 st.session_state.csv_loaded = True
                 st.session_state.current_metadata = result.get("metadata")
                 st.session_state.messages = []
@@ -101,7 +103,9 @@ with st.sidebar:
 # ─── Main Area ───
 if not st.session_state.csv_loaded:
     st.markdown("## Welcome to Aqqrue")
-    st.markdown("Upload a CSV file in the sidebar to get started. Then tell me what changes you'd like to make.")
+    st.markdown(
+        "Upload a CSV file in the sidebar to get started. Then tell me what changes you'd like to make."
+    )
     st.stop()
 
 # Show current CSV preview
@@ -119,7 +123,9 @@ for msg in st.session_state.messages:
             preview = msg["preview"]
             if preview.get("sample_after"):
                 st.caption("Preview (first 5 rows after change):")
-                st.dataframe(pd.DataFrame(preview["sample_after"]), use_container_width=True)
+                st.dataframe(
+                    pd.DataFrame(preview["sample_after"]), use_container_width=True
+                )
 
 # Chat input
 if prompt := st.chat_input("Describe the change you want to make..."):
@@ -139,18 +145,22 @@ if prompt := st.chat_input("Describe the change you want to make..."):
                 preview = result.get("preview")
                 if preview and preview.get("sample_after"):
                     st.caption("Preview (first 5 rows after change):")
-                    st.dataframe(pd.DataFrame(preview["sample_after"]), use_container_width=True)
+                    st.dataframe(
+                        pd.DataFrame(preview["sample_after"]), use_container_width=True
+                    )
 
                 # Update metadata
                 if result.get("metadata"):
                     st.session_state.current_metadata = result["metadata"]
 
                 # Store message
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": response_text,
-                    "preview": preview,
-                })
+                st.session_state.messages.append(
+                    {
+                        "role": "assistant",
+                        "content": response_text,
+                        "preview": preview,
+                    }
+                )
 
                 if result.get("error"):
                     st.error(result["error"])
@@ -158,4 +168,6 @@ if prompt := st.chat_input("Describe the change you want to make..."):
             except Exception as e:
                 error_msg = f"Error: {e}"
                 st.error(error_msg)
-                st.session_state.messages.append({"role": "assistant", "content": error_msg})
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": error_msg}
+                )
