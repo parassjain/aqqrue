@@ -4,6 +4,7 @@ from langgraph.graph import StateGraph, END
 
 from app.agent.state import AgentState
 from app.agent.nodes.router import router_node
+from app.agent.nodes.analysis import analysis_node
 from app.agent.nodes.planner import planner_node
 from app.agent.nodes.code_generator import code_generator_node
 from app.agent.nodes.validator import validator_node
@@ -65,8 +66,13 @@ def _increment_retry(state: AgentState) -> dict:
 
 
 def _route_after_router(state: AgentState) -> str:
-    """Route after router: answer questions directly or proceed to planning."""
-    return "answer" if state.get("intent") == "question" else "plan"
+    """Route after router: answer questions directly, run analysis, or proceed to planning."""
+    intent = state.get("intent")
+    if intent == "question":
+        return "answer"
+    if intent == "analysis":
+        return "analysis"
+    return "plan"
 
 
 def build_graph() -> StateGraph:
