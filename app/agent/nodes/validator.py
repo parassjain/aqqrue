@@ -109,12 +109,16 @@ def _static_validate(code: str) -> tuple[bool, list[str], list[str]]:
 
 def validator_node(state: AgentState) -> dict:
     """Validate generated code: static analysis + LLM semantic check."""
+    logger.info("[NODE: validator] Starting validation of generated code")
     code = state["generated_code"]
 
     # Step 1: Static validation (fast, no LLM)
     static_valid, static_errors, static_warnings = _static_validate(code)
+    logger.info("[NODE: validator] Static validation: valid=%s, errors=%s, warnings=%s",
+                static_valid, static_errors, static_warnings)
 
     if not static_valid:
+        logger.warning("[NODE: validator] Static validation failed: %s", static_errors)
         return {
             "validation_result": {
                 "valid": False,
