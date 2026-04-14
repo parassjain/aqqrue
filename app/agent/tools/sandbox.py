@@ -1,6 +1,8 @@
 """Docker sandbox client — sends code + CSV to an isolated container for execution."""
 
 import json
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -10,6 +12,7 @@ from app.config import settings
 
 
 SANDBOX_IMAGE = "aqqrue-sandbox"
+_RUNNER_PATH = Path(__file__).resolve().parents[3] / "app" / "sandbox" / "runner.py"
 
 
 def ensure_sandbox_image():

@@ -10,19 +10,24 @@ Produces:
 """
 
 import json
+import os
 import sys
 import traceback
 
 import pandas as pd
 
+INPUT_CSV = os.environ.get("SANDBOX_INPUT", "/home/sandbox/input.csv")
+CODE_FILE = os.environ.get("SANDBOX_CODE", "/home/sandbox/code.py")
+OUTPUT_CSV = os.environ.get("SANDBOX_OUTPUT", "/home/sandbox/output.csv")
+
 
 def main():
     try:
         # Read input CSV
-        df = pd.read_csv("/home/sandbox/input.csv")
+        df = pd.read_csv(INPUT_CSV)
 
         # Read and exec the transform code
-        with open("/home/sandbox/code.py", "r") as f:
+        with open(CODE_FILE, "r") as f:
             code = f.read()
 
         local_ns: dict = {}
@@ -37,7 +42,7 @@ def main():
 
         if isinstance(result, pd.DataFrame):
             # Standard operation: write CSV output
-            result.to_csv("/home/sandbox/output.csv", index=False)
+            result.to_csv(OUTPUT_CSV, index=False)
             print(json.dumps({
                 "success": True,
                 "rows": len(result),
