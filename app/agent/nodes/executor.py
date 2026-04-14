@@ -32,6 +32,8 @@ def executor_node(state: AgentState) -> dict:
         }
 
     result = run_in_sandbox(state["generated_code"], csv_bytes)
+    logger.info("[NODE: executor] Sandbox result: success=%s, rows=%s, error=%s",
+                result["success"], result.get("rows"), result.get("error"))
 
     return {
         "execution_result": {
