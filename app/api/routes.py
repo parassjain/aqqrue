@@ -106,7 +106,11 @@ def undo(session_id: str):
     if result is None:
         return UndoResponse(success=False, message="Nothing to undo")
 
-    return UndoResponse(success=True, metadata=result, message=f"Reverted to version {result['version']}")
+    return UndoResponse(
+        success=True,
+        metadata=result,
+        message=f"Reverted to version {result['version']}",
+    )
 
 
 @router.get("/session/{session_id}/download")
@@ -122,7 +126,9 @@ def download_csv(session_id: str):
     return StreamingResponse(
         io.BytesIO(csv_bytes),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename=output_v{csv_mgr.current_version}.csv"},
+        headers={
+            "Content-Disposition": f"attachment; filename=output_v{csv_mgr.current_version}.csv"
+        },
     )
 
 
