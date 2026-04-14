@@ -39,6 +39,10 @@ def auditor_node(state: AgentState) -> dict:
         "rows_after": exec_result.get("rows", 0),
     }
 
+    logger.info("[NODE: auditor] Saved version v%s: %d→%d rows",
+                new_metadata["version"],
+                audit_entry["rows_before"],
+                audit_entry["rows_after"])
     audit_log = list(state.get("audit_log", []))
     audit_log.append(audit_entry)
 
