@@ -172,6 +172,7 @@ def validator_node(state: AgentState) -> dict:
     result["warnings"] = static_warnings + result.get("warnings", [])
 
     is_valid = result.get("valid", False)
+    logger.info("[NODE: validator] LLM validation: valid=%s, errors=%s", is_valid, result.get("errors", []))
     return {
         "validation_result": {
             "valid": is_valid,
