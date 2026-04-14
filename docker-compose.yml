@@ -6,6 +6,7 @@ services:
     volumes:
       - ./data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp:/tmp
     env_file:
       - .env
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
