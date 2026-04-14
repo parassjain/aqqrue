@@ -31,6 +31,50 @@ def ensure_sandbox_image():
         client.close()
 
 
+def _run_locally(code: str, csv_bytes: bytes) -> dict:
+    """Fallback: run the transform in a local subprocess (no Docker isolation)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        input_csv = tmpdir_path / "input.csv"
+        input_csv.write_bytes(csv_bytes)
+        code_file = tmpdir_path / "code.py"
+        code_file.write_text(code)
+        output_csv = tmpdir_path / "output.csv"
+        output_csv.touch()
+
+        env = {
+            "SANDBOX_INPUT": str(input_csv),
+            "SANDBOX_CODE": str(code_file),
+            "SANDBOX_OUTPUT": str(output_csv),
+        }
+
+        try:
+            proc = subprocess.run(
+                [sys.executable, str(_RUNNER_PATH)],
+                capture_output=True,
+                text=True,
+                timeout=settings.SANDBOX_TIMEOUT,
+                env={**dict(__import__("os").environ), **env},
+            )
+            output = (proc.stdout or proc.stderr or "").strip()
+            try:
+                result = json.loads(output)
+            except json.JSONDecodeError:
+                return {"success": False, "csv_output": None, "error": f"Runner output: {output}"}
+
+            if result.get("success"):
+                if "result_value" in result:
+                    return {"success": True, "csv_output": None, "error": None, "result_value": result["result_value"], "rows": None, "columns": None}
+                return {"success": True, "csv_output": output_csv.read_bytes(), "error": None, "rows": result.get("rows"), "columns": result.get("columns")}
+            else:
+                return {"success": False, "csv_output": None, "error": result.get("error", "Unknown error")}
+
+        except subprocess.TimeoutExpired:
+            return {"success": False, "csv_output": None, "error": f"Execution timed out after {settings.SANDBOX_TIMEOUT}s"}
+        except Exception as e:
+            return {"success": False, "csv_output": None, "error": f"{type(e).__name__}: {e}"}
+
+
 def run_in_sandbox(code: str, csv_bytes: bytes) -> dict:
     """Run generated code on CSV inside a Docker sandbox.
 
