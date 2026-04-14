@@ -1,5 +1,9 @@
+import logging
+
 from app.agent.state import AgentState
 from app.agent.tools.sandbox import run_in_sandbox
+
+logger = logging.getLogger(__name__)
 
 
 def executor_node(state: AgentState) -> dict:
