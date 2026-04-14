@@ -22,6 +22,7 @@ def code_generator_node(state: AgentState) -> dict:
     # Build error context for retries
     error_context = ""
     if retry:
+        logger.info("[NODE: code_generator] Retrying with previous error: %s", state["last_error"])
         error_context = CODE_GENERATOR_RETRY_CONTEXT.format(
             error=state["last_error"],
             previous_code=state["generated_code"],
