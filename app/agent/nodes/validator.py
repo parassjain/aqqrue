@@ -72,15 +72,18 @@ def _static_validate(code: str) -> tuple[bool, list[str], list[str]]:
     # Check for blocked imports
     for node in ast.walk(tree):
         if isinstance(node, (ast.Import, ast.ImportFrom)):
-            module = None
+            modules_to_check = []
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    module = alias.name.split(".")[0]
-            elif node.module:
-                module = node.module.split(".")[0]
+                    modules_to_check.append(alias.name.split(".")[0])
+            elif isinstance(node, ast.ImportFrom):
+                # node.module is None for relative imports like `from . import x`
+                if node.module is not None:
+                    modules_to_check.append(node.module.split(".")[0])
 
-            if module and module in BLOCKED_MODULES:
-                errors.append(f"Blocked import: {module}")
+            for module in modules_to_check:
+                if module and module in BLOCKED_MODULES:
+                    errors.append(f"Blocked import: {module}")
 
         # Check for blocked builtins used as function calls
         if isinstance(node, ast.Call):
@@ -147,23 +150,28 @@ def validator_node(state: AgentState) -> dict:
     try:
         result = json.loads(raw)
     except json.JSONDecodeError:
-        # If LLM doesn't return valid JSON, assume valid (static check passed)
-        result = {
-            "valid": True,
-            "errors": [],
-            "warnings": [f"LLM validator returned non-JSON: {raw[:100]}"],
+        # Cannot parse LLM response — fail closed, do not assume valid
+        error_msg = f"LLM validator returned non-JSON response: {raw[:200]}"
+        return {
+            "validation_result": {
+                "valid": False,
+                "errors": [error_msg],
+                "warnings": static_warnings,
+            },
+            "last_error": error_msg,
         }
 
     # Merge static warnings
     result["warnings"] = static_warnings + result.get("warnings", [])
 
+    is_valid = result.get("valid", False)
     return {
         "validation_result": {
-            "valid": result.get("valid", True),
+            "valid": is_valid,
             "errors": result.get("errors", []),
             "warnings": result.get("warnings", []),
         },
         "last_error": (
-            "; ".join(result.get("errors", [])) if not result.get("valid", True) else ""
+            "; ".join(result.get("errors", [])) if not is_valid else ""
         ),
     }

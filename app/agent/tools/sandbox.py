@@ -2,8 +2,6 @@
 
 import json
 import logging
-import subprocess
-import sys
 import tempfile
 from pathlib import Path
 
@@ -14,7 +12,6 @@ logger = logging.getLogger(__name__)
 from app.config import settings
 
 SANDBOX_IMAGE = "aqqrue-sandbox"
-_RUNNER_PATH = Path(__file__).resolve().parents[3] / "app" / "sandbox" / "runner.py"
 
 
 def ensure_sandbox_image():
@@ -31,80 +28,6 @@ def ensure_sandbox_image():
         )
     finally:
         client.close()
-
-
-def _run_locally(code: str, csv_bytes: bytes) -> dict:
-    """Fallback: run the transform in a local subprocess (no Docker isolation)."""
-    logger.info("Executing code locally via subprocess (no Docker isolation)")
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir_path = Path(tmpdir)
-        input_csv = tmpdir_path / "input.csv"
-        input_csv.write_bytes(csv_bytes)
-        code_file = tmpdir_path / "code.py"
-        code_file.write_text(code)
-        output_csv = tmpdir_path / "output.csv"
-        output_csv.touch()
-
-        env = {
-            "SANDBOX_INPUT": str(input_csv),
-            "SANDBOX_CODE": str(code_file),
-            "SANDBOX_OUTPUT": str(output_csv),
-        }
-
-        try:
-            proc = subprocess.run(
-                [sys.executable, str(_RUNNER_PATH)],
-                capture_output=True,
-                text=True,
-                timeout=settings.SANDBOX_TIMEOUT,
-                env={**dict(__import__("os").environ), **env},
-            )
-            output = (proc.stdout or proc.stderr or "").strip()
-            try:
-                result = json.loads(output)
-            except json.JSONDecodeError:
-                return {
-                    "success": False,
-                    "csv_output": None,
-                    "error": f"Runner output: {output}",
-                }
-
-            if result.get("success"):
-                if "result_value" in result:
-                    return {
-                        "success": True,
-                        "csv_output": None,
-                        "error": None,
-                        "result_value": result["result_value"],
-                        "rows": None,
-                        "columns": None,
-                    }
-                return {
-                    "success": True,
-                    "csv_output": output_csv.read_bytes(),
-                    "error": None,
-                    "rows": result.get("rows"),
-                    "columns": result.get("columns"),
-                }
-            else:
-                return {
-                    "success": False,
-                    "csv_output": None,
-                    "error": result.get("error", "Unknown error"),
-                }
-
-        except subprocess.TimeoutExpired:
-            return {
-                "success": False,
-                "csv_output": None,
-                "error": f"Execution timed out after {settings.SANDBOX_TIMEOUT}s",
-            }
-        except Exception as e:
-            return {
-                "success": False,
-                "csv_output": None,
-                "error": f"{type(e).__name__}: {e}",
-            }
 
 
 def run_in_sandbox(code: str, csv_bytes: bytes) -> dict:
@@ -124,9 +47,13 @@ def run_in_sandbox(code: str, csv_bytes: bytes) -> dict:
     """
     try:
         client = docker.from_env()
-    except docker.errors.DockerException:
-        logger.warning("Docker not available — running code locally (no isolation)")
-        return _run_locally(code, csv_bytes)
+    except docker.errors.DockerException as e:
+        logger.error("Docker not available — refusing to run code outside sandbox: %s", e)
+        return {
+            "success": False,
+            "csv_output": None,
+            "error": "Docker is not available. Code execution requires a Docker sandbox.",
+        }
 
     logger.info("Running code in Docker sandbox (image: %s)", SANDBOX_IMAGE)
 

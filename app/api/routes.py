@@ -34,6 +34,13 @@ async def upload_csv(session_id: str, file: UploadFile = File(...)):
     if not content:
         raise HTTPException(status_code=400, detail="Empty file")
 
+    MAX_CSV_SIZE = 100 * 1024 * 1024  # 10 MB
+    if len(content) > MAX_CSV_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large ({len(content) // (1024*1024)} MB). Maximum allowed size is 10 MB.",
+        )
+
     try:
         metadata = csv_mgr.load_csv(content, filename=file.filename or "upload.csv")
     except Exception as e:

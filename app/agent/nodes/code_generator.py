@@ -50,9 +50,4 @@ def code_generator_node(state: AgentState) -> dict:
 
     return {
         "generated_code": code,
-        "retry_count": (
-            state.get("retry_count", 0) + 1
-            if state.get("last_error")
-            else state.get("retry_count", 0)
-        ),
     }
