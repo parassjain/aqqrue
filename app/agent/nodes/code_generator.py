@@ -10,14 +10,18 @@ from app.agent.prompts.code_generator import (
     CODE_GENERATOR_RETRY_CONTEXT,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def code_generator_node(state: AgentState) -> dict:
     """Generate pandas transform code based on the plan."""
+    retry = bool(state.get("last_error") and state.get("generated_code"))
+    logger.info("[NODE: code_generator] Generating code (retry=%s)", retry)
     metadata = state["csv_metadata"]
 
     # Build error context for retries
     error_context = ""
-    if state.get("last_error") and state.get("generated_code"):
+    if retry:
         error_context = CODE_GENERATOR_RETRY_CONTEXT.format(
             error=state["last_error"],
             previous_code=state["generated_code"],
