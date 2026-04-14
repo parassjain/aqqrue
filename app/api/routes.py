@@ -1,4 +1,6 @@
 import io
+import traceback
+
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse
 
@@ -73,7 +75,14 @@ def chat(session_id: str, request: ChatRequest):
     try:
         result = agent_graph.invoke(initial_state)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Agent error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": str(e),
+                "type": type(e).__name__,
+                "traceback": traceback.format_exc(),
+            },
+        )
 
     # Get updated metadata
     updated_metadata = csv_mgr.get_metadata()
