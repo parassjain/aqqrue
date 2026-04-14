@@ -1,5 +1,9 @@
+import logging
 import time
+
 from app.agent.state import AgentState
+
+logger = logging.getLogger(__name__)
 
 
 def auditor_node(state: AgentState) -> dict:
